@@ -2,3 +2,54 @@ baseURL: "https://fuyi-atlas.github.io/"
 languageCode: en-us
 title: "Fuyi Atlas"
 theme: PaperMod
+
+enableInlineShortcodes: true
+enableRobotsTXT: true
+enableEmoji: true
+
+params:
+  homeInfoParams:
+    Title: "Fuyi Atlas"
+    # Content: "如果你想要拥有从未有过的东西，那就去做你从未做过的事!"
+    Content: >
+      **I have a dream too !**
+      
+        - 开源技术赋予我们站在巨人的肩膀上做到更高更强的可能，我想通过开源技术来构建一个地理信息的世界，愿给地理信息数据带来更多的使用价值。
+        
+        - 既然都说人类活动所接触、产生的信息80%以上都与地理空间位置有关，那么这些空间数据就应该很容易的被使用，而不是仅被围困在专业领域内，不是吗？
+
+        - <br>
+
+        - 如果你想要拥有从未有过的东西，那就去做你从未做过的事!
+  socialIcons:
+    - name: github
+      url: "https://github.com/zhou-fuyi"
+  cover:
+    linkFullImages: true
+  ShowBreadCrumbs: true
+  ShowReadingTime: true
+  ShowPostNavLinks: true
+
+# menu config
+menu:
+  main:
+    - identifier: archives
+      name: Archives
+      url: /archives/
+      weight: 5
+    - identifier: search
+      name: Search
+      url: /search/
+      weight: 10
+    - identifier: categories
+      name: Categories
+      url: /categories/
+      weight: 15
+    - identifier: tags
+      name: Tags
+      url: /tags/
+      weight: 20  
+    - identifier: about
+      name: About
+      url: /about/
+      weight: 25
