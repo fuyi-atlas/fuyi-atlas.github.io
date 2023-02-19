@@ -5,6 +5,8 @@ echo "Depoly to Github Pages..."
 # 确保脚本抛出遇到的错误
 set -e
 
+rm -rf public/
+
 # 生成静态文件
 hugo
 
@@ -15,7 +17,7 @@ git init
 git add -A
 git commit -m 'deploy'
 
-git push -f git@github.com:fuyi-atlas/fuyi-atlas.github.io.git main:gh-pages
+git push -f git@github.com:fuyi-atlas/fuyi-atlas.github.io.git master:gh-pages
 
 cd -
-rm -rf public/*
+rm -rf public/
