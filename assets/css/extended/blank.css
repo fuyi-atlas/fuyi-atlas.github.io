@@ -1,0 +1,21 @@
+body {
+    font-family: 'Josefin Sans', -apple-system, 'PingFang SC', 'Hiragino Sans GB', 'Microsoft Yahei', 'WenQuanYi Micro Hei', 'ST Heiti', sans-serif;
+    line-height: 1.85;
+    font-weight: 300;
+    letter-spacing: .05ex;
+    background: #f8f8f8;
+    /* font-size: 1.9rem; */
+}
+
+.post-title {
+    /* font-family: 'Josefin Sans', -apple-system, 'PingFang SC', 'Hiragino Sans GB', 'Microsoft Yahei', 'WenQuanYi Micro Hei', 'ST Heiti', sans-serif; */
+    font-weight: 700;
+}
+
+.post-content {
+    font-family: Georgia, -apple-system, 'Nimbus Roman No9 L', 'PingFang SC', 'Hiragino Sans GB', 'Noto Serif SC', 'Microsoft Yahei', 'WenQuanYi Micro Hei', 'ST Heiti', serif;
+    line-height: 1.85;
+    font-weight: 300;
+    letter-spacing: .05ex;
+    /* font-size: 19px; */
+}

@@ -1,10 +1,11 @@
 baseURL: "https://fuyi-atlas.github.io/"
 languageCode: en-us
 title: "Fuyi Atlas"
+paginate: 10    # 首页每页显示的文章数
 theme: PaperMod
 
 enableInlineShortcodes: true
-# enableRobotsTXT: true
+enableRobotsTXT: true # 允许爬虫抓取到搜索引擎，建议 true
 enableEmoji: true
 pygmentsUseClasses: true
 
@@ -85,6 +86,10 @@ params:
   socialIcons:
     - name: github
       url: "https://github.com/zhou-fuyi"
+    - name: email
+      url: "mailto:thread.zhou@gmail.com"
+    - name: RSS
+      url: "index.xml"
   cover:
     linkFullImages: true
   ShowBreadCrumbs: true
