@@ -159,6 +159,6 @@ hugo version
     ```bash
     hugo server
     ```
-    ![fuyi-atlas-init.png](http://img.zhoujian.site/knowledge-base/other/fuyi-atlas-init.png)
+    ![fuyi-atlas-init.png](https://img.zhoujian.site/knowledge-base/other/fuyi-atlas-init.png)
 
     至此，Fuyi Atlas的初始构建便结束了。

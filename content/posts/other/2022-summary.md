@@ -24,7 +24,7 @@ categories: ["other", "summary"]
 
 好在所在的区域情况并没有那么的严重，还是可以去买菜的。领了消费券，再加上公司发的年货，也没有想象中的那么糟糕。
 
-![年夜饭](http://img.zhoujian.site/knowledge-base/other/2022%E6%98%A5%E8%8A%82-%E6%99%9A%E9%A4%90.jpeg)
+![年夜饭](https://img.zhoujian.site/knowledge-base/other/2022%E6%98%A5%E8%8A%82-%E6%99%9A%E9%A4%90.jpeg)
 
 ### 拂衣天气
 
@@ -43,15 +43,15 @@ categories: ["other", "summary"]
 - 拖延症后期患者
 - 对，都是借口，就是懒
 
-![首页--001](http://img.zhoujian.site/knowledge-base/other/%E6%8B%82%E8%A1%A3%E5%A4%A9%E6%B0%94-001.png)
+![首页--001](https://img.zhoujian.site/knowledge-base/other/%E6%8B%82%E8%A1%A3%E5%A4%A9%E6%B0%94-001.png)
 
-![首页--002](http://img.zhoujian.site/knowledge-base/other/%E6%8B%82%E8%A1%A3%E5%A4%A9%E6%B0%94-002.png)
+![首页--002](https://img.zhoujian.site/knowledge-base/other/%E6%8B%82%E8%A1%A3%E5%A4%A9%E6%B0%94-002.png)
 
-![首页--003](http://img.zhoujian.site/knowledge-base/other/%E6%8B%82%E8%A1%A3%E5%A4%A9%E6%B0%94-003.png)
+![首页--003](https://img.zhoujian.site/knowledge-base/other/%E6%8B%82%E8%A1%A3%E5%A4%A9%E6%B0%94-003.png)
 
-![城市选择](http://img.zhoujian.site/knowledge-base/other/%E6%8B%82%E8%A1%A3%E5%A4%A9%E6%B0%94-004.png)
+![城市选择](https://img.zhoujian.site/knowledge-base/other/%E6%8B%82%E8%A1%A3%E5%A4%A9%E6%B0%94-004.png)
 
-![分享卡片](http://img.zhoujian.site/knowledge-base/other/%E6%8B%82%E8%A1%A3%E5%A4%A9%E6%B0%94-005.png)
+![分享卡片](https://img.zhoujian.site/knowledge-base/other/%E6%8B%82%E8%A1%A3%E5%A4%A9%E6%B0%94-005.png)
 
 ### WebGIS项目开发
 
