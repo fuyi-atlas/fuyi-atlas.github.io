@@ -99,8 +99,8 @@ params:
   ShowCodeCopyButtons: true
   # ShowRssButtonInSectionTermList: true
   ShowToc: true
-  # assets:
-  #   disableHLJS: true
+  assets:
+    disableHLJS: true
 
 # config search
 outputs:
@@ -109,14 +109,14 @@ outputs:
     - RSS
     - JSON # is necessary
 
-# markup:
-#   goldmark:
-#     renderer:
-#       unsafe: false
-#   highlight:
-#     # anchorLineNos: true
-#     codeFences: true
-#     guessSyntax: true
-#     # lineNos: true
-#     noClasses: false
-#     style: monokai
+markup:
+  goldmark:
+    renderer:
+      unsafe: true
+  highlight:
+    # anchorLineNos: true
+    codeFences: true
+    guessSyntax: true
+    # lineNos: true
+    noClasses: false
+    style: monokai
