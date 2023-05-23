@@ -162,3 +162,56 @@ hugo version
     ![fuyi-atlas-init.png](https://img.zhoujian.site/knowledge-base/other/fuyi-atlas-init.png)
 
     至此，Fuyi Atlas的初始构建便结束了。
+
+## Update
+
+上述环境是在Fedora Linux 37下执行的。由于部分软件在Linux无法使用，所以我现在又换到了Windows（Win10 + WSL2）
+
+在WSl2 + Debian中安装hugo与上述存在一定的差异
+
+- 代理设置
+
+这里ip需要指向宿主机的IP，且Clash需要开启LAN访问（ALLOW LAN）
+
+```bash
+export https_proxy=http://192.168.199.121:7890;export http_proxy=http://192.168.199.121:7890;export all_proxy=socks5://192.168.199.121:7890
+```
+
+- 没有预装GCC
+    
+    ```bash
+    apt install build-essential
+    ```
+    
+- GO编译相关的环境变量设置
+    
+    ```bash
+    export GOOS="linux"
+    export CGO_ENABLED="1"
+    ```
+    
+
+同时，git submodule需要手动同步一下
+
+```bash
+git submodule update --init --recursive
+```
+
+@update_time    2023.05.22
+
+---
+
+## 参考
+
+- [Github Pages](https://pages.github.com/)
+- [GitHub Pages 使用入门](https://docs.github.com/zh/pages/getting-started-with-github-pages)
+- [Hugo Documentation](https://gohugo.io/documentation/)
+- [Getting Started With Hugo | FREE COURSE](https://www.youtube.com/watch?v=hjD9jTi_DQ4&list=PLeiDFxcsdhUrzkK5Jg9IZyiTsIMvXxKZP&index=2)
+- [PaperMod Installation | Update](https://adityatelange.github.io/hugo-PaperMod/posts/papermod/papermod-installation/)
+- [云图 – 云计算图志](https://cloud-atlas.readthedocs.io/zh_CN/latest/)
+
+- [适用于 Linux 的 Windows 子系统文档](https://learn.microsoft.com/zh-cn/windows/wsl/)
+- [Dev on Windows with WSL](https://dowww.spencerwoo.com/)
+- [为 WSL2 一键设置代理](https://zhuanlan.zhihu.com/p/153124468)
+- [go build编译失败：imports xxx/xxx/xxx: build constraints exclude all Go files in xxx/xxx/xxx](https://blog.csdn.net/weixin_42845682/article/details/124568715)
+- [git-github 子模块仓库更新（git submodule）/git中submodule子模块的添加、使用和删除](https://blog.csdn.net/inthat/article/details/108416238)
