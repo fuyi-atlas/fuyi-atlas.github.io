@@ -58,7 +58,7 @@ int main()
 - PC：程序计数器；
 - USB：通用串行总线
 
-![硬件组成](https://img.zhoujian.site/knowledge-base/computer/hardware%20composition.png)
+![hardware-composition](https://zhou-fuyi.github.io/picx-images-hosting/hardware-composition.4910z9741l.webp)
 
 ### 总线
 
@@ -105,7 +105,7 @@ int main()
 
 在处理器和一个较大较慢的设备（例如主存）之间插入一个更小更快的存储设备（例如高速缓存）的想法已经成为一个普遍的观念。实际上，每个计算机系统中的存储设备都被组织成了一个**存储器层次结构**，如图 1-9 所示。在这个层次结构中，从上至下，设备的访问速度越来越慢、容量越来越大，并且每字节的造价也越来越便宜。寄存器文件在层次结构中位于最顶部，也就是第 0 级或记为 L0。这里我们展示的是三层高速缓存 L1 到 L3，占据存储器层次结构的第 1 层到第 3 层。主存在第 4 层，以此类推。
 
-![存储器层次结构图](https://img.zhoujian.site/knowledge-base/computer/Memory%20Hierarchy%20Diagram.png)
+![Memory-Hierarchy-Diagram](https://zhou-fuyi.github.io/picx-images-hosting/Memory-Hierarchy-Diagram.1zi0frmdl0.webp)
 
 存储器层次结构的主要思想是上一层的存储器作为低一层存储器的高速缓存。因此，寄存器文件就是 L1 的高速缓存，L1 是 L2 的高速缓存，L2 是 L3 的高速缓存，L3 是主存的高速缓存，而主存又是磁盘的高速缓存。在某些具有分布式文件系统的网络系统中，本地磁盘就是存储在其他系统中磁盘上的数据的高速缓存。 正如可以运用不同的高速缓存的知识来提高程序性能一样，程序员同样可以利用对整个存储器层次结构的理解来提高程序性能。
 
@@ -113,7 +113,7 @@ int main()
 
 我们可以把操作系统看作是应用程序与硬件之间插入的一层软件，所有应用程序对硬件的操作尝试都必须通过操作系统
 
-![操作系统抽象图](https://img.zhoujian.site/knowledge-base/computer/Operating%20System%20Abstract%20Diagram.png)
+![Operating-System-Abstract-Diagram](https://zhou-fuyi.github.io/picx-images-hosting/Operating-System-Abstract-Diagram.4910z97421.webp)
 
 ### 操作系统的两个基本功能
 
@@ -122,7 +122,7 @@ int main()
 
 操作系统通过几个基本的抽象概念（进程、虚拟内存和文件）来实现这两个功能
 
-![进程抽象图](https://img.zhoujian.site/knowledge-base/computer/process%20abstraction%20graph.png)
+![process-abstraction-graph](https://zhou-fuyi.github.io/picx-images-hosting/process-abstraction-graph.8z69xnyqfi.webp)
 
 - 文件是对I/O设备的抽象表示
 - 虚拟内存是对主存和磁盘I/O的抽象表示
@@ -138,7 +138,7 @@ int main()
 
 从一个进程到另一个进程的切换（上下文切换）是由操作系统内核（kernel）管理的。内核是操作系统代码常驻主存的部分。*当应用程序需要操作系统的某些操作时，比如读写文件，它（应用程序）就执行一条特殊的系统调用（system call）指令，将控制权传递给内核。然后内核执行被请求的操作并返回给应用程序。（用户态与内核态切换）*注意：内核不是一个独立的进程。相反，它是系统管理全部进程所用代码和数据结构的集合。
 
-![上下文切换用例图](https://img.zhoujian.site/knowledge-base/computer/Context%20switching%20use%20case%20diagram.png "shell进程A与hello进程B")
+![Context-switching-use-case-diagram](https://zhou-fuyi.github.io/picx-images-hosting/Context-switching-use-case-diagram.ltpfgv92.webp "shell进程A与hello进程B")
 
 ## 线程
 
@@ -148,7 +148,7 @@ int main()
 
 虚拟内存是一个抽象概念，它为每个进程都提供一个假象，即每个进程都在独占地使用主存。每个进程看到的内存都是一致的，称为虚拟地址空间。
 
-![虚拟内存结构图](https://img.zhoujian.site/knowledge-base/computer/Virtual%20memory%20structure%20diagram.png)
+![Virtual-memory-structure-diagram](https://zhou-fuyi.github.io/picx-images-hosting/Virtual-memory-structure-diagram.3go5hiqidj.webp)
 
 在 Linux 中，地址空间最上面的区域是保留给操作系统中的代码和数据的，这对所有进程来说都是一样。地址空间的底部区域存放用户进程定义的代码和数据。请注意，图中的地址是从下往上增大的。
 
@@ -188,11 +188,11 @@ S=1/((1-a) + a/k)
 
 构建在进程这个抽象之上，我们能够设计出同时有多个程序执行的系统，这就导致了并发。使用线程，我们甚至能够在一个进程中执行多个控制流。自 20 世纪 60 年代初期出现时间共享以来，计算机系统中就开始有了对并发执行的支持。传统意义上，这种并发执行只是模拟出来的，是通过使一台计算机在它正在执行的进程间快速切换来实现的，就好像一个杂耍艺人保持多个球在空中飞舞一样。在以前，即使处理器必须在多个任务间切换，大多数实际的计算也都是由一个处理器来完成的。这种配置称为单处理器系统。
 
-![处理器系统类别图](https://img.zhoujian.site/knowledge-base/computer/Processor%20System%20Class%20Diagram.png)
+![Processor-System-Class-Diagram](https://zhou-fuyi.github.io/picx-images-hosting/Processor-System-Class-Diagram.1seskc0868.webp)
 
 多核处理器是将多个 CPU（称为“核”）集成到一个集成电路芯片上。图 1-17 描述的是一个典型多核处理器的组织结构，其中微处理器芯片有 4 个 CPU 核，每个核都有自己的 L1 和 L2 高速缓存，其中的 L1 高速缓存分为两个部分——一个保存最近取到的指令，另一个存放数据。这些核共享更高层次的高速缓存，以及到主存的接口。
 
-![多核处理器结构示意图](https://img.zhoujian.site/knowledge-base/computer/Schematic%20diagram%20of%20multi-core%20processor%20structure.png)
+![Schematic-diagram-of-multi-core-processor-structure](https://zhou-fuyi.github.io/picx-images-hosting/Schematic-diagram-of-multi-core-processor-structure.9dcpoj71bm.webp)
 
 超线程，有时称为同时多线程（simultaneous multi-threading），是一项允许一个 CPU 执行多个控制流的技术。它涉及 CPU 某些硬件有多个备份，比如程序计数器和寄存器文件，而其他的硬件部分只有一份，比如执行浮点算术运算的单元。常规的处理器需要大约 20000 个时钟周期做不同线程间的转换，而超线程的处理器可以在单个周期的基础上决定要执行哪一个线程。这使得 CPU 能够更好地利用它的处理资源。比如，假设一个线程必须等到某些数据被装载到高速缓存中，那 CPU 就可以继续去执行另一个线程（时间空档切换）。举例来说，Intel Core i7 处理器可以让每个核执行两个线程，所以一个 4 核的系统实际上可以并行地执行 8 个线程。
 
@@ -212,7 +212,7 @@ S=1/((1-a) + a/k)
 
 此图表示计算机系统提供的一些抽象。计算机系统中的一个重大主题就是提供不同层次的抽象表示，来隐藏实际实现的复杂性
 
-![虚拟机抽象图](https://img.zhoujian.site/knowledge-base/computer/Virtual%20Machine%20Abstract%20Diagram.png)
+![Virtual-Machine-Abstract-Diagram](https://zhou-fuyi.github.io/picx-images-hosting/Virtual-Machine-Abstract-Diagram.58h4cf9v93.webp)
 
 ### 操作系统的三个抽象
 

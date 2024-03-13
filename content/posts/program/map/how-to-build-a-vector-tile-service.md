@@ -24,7 +24,7 @@ tags:
 
 矢量瓦片的产生弥补了栅格瓦片的不足。矢量瓦片数据以矢量形式存在。矢量瓦片体积下，可高度压缩，占用的存储空间比栅格瓦片要小上千倍。数据传输体量小，地图更新的代价小
 
-![适量瓦片介绍架构图](https://img.zhoujian.site/knowledge-base/program/map/vector-tile-arch.png)
+![vector-tile-arch](https://zhou-fuyi.github.io/picx-images-hosting/vector-tile-arch.99t3quzzk0.webp)
 
 ### 常见的矢量瓦片制作工具（节选）
 
@@ -114,7 +114,7 @@ tags:
 
 那么大体的实现路径可归结于如下所示：
 
-![矢量瓦片服务实现路径](https://img.zhoujian.site/knowledge-base/program/map/%E7%9F%A2%E9%87%8F%E7%93%A6%E7%89%87%E6%9C%8D%E5%8A%A1%E5%AE%9E%E7%8E%B0%E8%B7%AF%E5%BE%84.png)
+![矢量瓦片服务实现路径](https://zhou-fuyi.github.io/picx-images-hosting/矢量瓦片服务实现路径.8kzu6ucgk3.webp)
 
 其中的核心要点总结如下：
 
@@ -145,7 +145,7 @@ tags:
 
 每一层级瓦片对应一层金字塔，各个层级的瓦片构成了整个瓦片金字塔模型。每一层中的瓦片划分方法一般采用均匀四分的划分方法，即以赤道和中央经线的交点为初始中心，不断地对地图进行四分，直到每个格网的大小为tilesize * tilesize为止，其中tilesize表示单个瓦片的边长。基于此种划分方法，第0层金字塔（*金字塔顶层*）用一个瓦片就能表示整张世界地图，第1层要用4^z个瓦片来表示整个世界地图，z为当前瓦片的金字塔层级。
 
-![金字塔模型示意图](https://img.zhoujian.site/knowledge-base/program/map/%E9%87%91%E5%AD%97%E5%A1%94%E7%A4%BA%E6%84%8F%E5%9B%BE1.png)
+![金字塔示意图1](https://zhou-fuyi.github.io/picx-images-hosting/金字塔示意图1.5q7611x9sg.webp)
 
 #### 瓦片坐标系（节选）
 
@@ -153,9 +153,9 @@ tags:
 
 瓦片的编码方式如下图所示，层级用z表示，瓦片经线方向（*指瓦片经度发生变化的方法，即东西向，东向为正*）上编号为x，纬线方向（指瓦片维度发生变化的方向，即南北向，南向为正）上编号为y，因此每一个瓦片都可以通过一个三维元组（x,y,z）来唯一描述。
 
-![瓦片坐标系1](https://img.zhoujian.site/knowledge-base/program/map/%E7%93%A6%E7%89%87%E5%9D%90%E6%A0%87%E7%B3%BB1.png)
-![瓦片坐标系2](https://img.zhoujian.site/knowledge-base/program/map/%E7%93%A6%E7%89%87%E5%9D%90%E6%A0%87%E7%B3%BB2.png)
-![瓦片坐标系3](https://img.zhoujian.site/knowledge-base/program/map/%E7%93%A6%E7%89%87%E5%9D%90%E6%A0%87%E7%B3%BB3.png)
+![瓦片坐标系1](https://zhou-fuyi.github.io/picx-images-hosting/瓦片坐标系1.8vmnzzropy.webp)
+![瓦片坐标系2](https://zhou-fuyi.github.io/picx-images-hosting/瓦片坐标系2.7i04vygmpf.webp)
+![瓦片坐标系3](https://zhou-fuyi.github.io/picx-images-hosting/瓦片坐标系3.6t6vbxt3pb.webp)
 
 > 💡 节选自《高性能影像数据瓦片化关键技术研究-刘世永-2016》，章节：第二章，2.1-2.3
 
@@ -380,8 +380,8 @@ public static GridSet createGridSet(String name, SRS srs, BoundingBox extent, bo
 
 叠加底图进行验证
 
-![Result 1](https://img.zhoujian.site/knowledge-base/program/map/result1.png)
-![Result 2](https://img.zhoujian.site/knowledge-base/program/map/result2.png)
+![result1](https://zhou-fuyi.github.io/picx-images-hosting/result1.3razaprrem.webp)
+![result2](https://zhou-fuyi.github.io/picx-images-hosting/result2.7egiy8njxk.webp)
 
 ## 参考
 
