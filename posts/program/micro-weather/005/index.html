@@ -1,0 +1,1047 @@
+<!DOCTYPE html>
+<html lang="en" dir="auto">
+
+<head><meta charset="utf-8">
+<meta http-equiv="X-UA-Compatible" content="IE=edge">
+<meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
+<meta name="robots" content="index, follow">
+<title>微天气—行政区划数据（一） | Fuyi Atlas</title>
+<meta name="keywords" content="weather">
+<meta name="description" content="前言 微天气程序中存在如下几个功能需要使用到行政区划数据：
+城市列表，需要支持城市搜索 根据经纬度获区域（城市）的天气数据 地图坐标拾取并获取所处区域（城市）信息，同时获取天气数据 对于城市的天气数据，不使用和风天气的城市列表，而是自行维护，通过空间位置（经纬度）进行关联。对于城市位置的定义，本可以选择如行政中心或市中心，但我没有这样的数据，就直接用城市区划范围的中心点代替。不准确不重要，过程已经满足了，且后续是可以替换的。
+其实完全可以使用官方提供的城市数据和GeoAPI覆盖这些功能，但既然我是做GIS开发的，而且手里也有可以用作研究学习的数据，为啥不用呢。
+今天突然发现，其实我可以爬一下和风的数据，这样就可以拿到城市选择的经纬度数据了 @time 2023.10.10
+About 行政区划解析程序，输入shape文件，写入Postgresql.
+大体完整的四级行政区划数据组织
+github link: fuyi-district-parse
+数据情况 数据原源于网络，由于时间久远，我已经忘记了是如何获取到的
+名词解释 省级行政区 中国的一级行政区，或称国家一级行政区或省级行政区，是指直属中央政府管辖的行政区划，在历史上曾有不同的称呼。如：省、自治区、直辖市、特别行政区。
+地级行政区 地级行政区即“地区级别行政区”，是现行中华人民共和国行政区划中常规的第二级行政区划单位，包括地级市、地区、盟、自治州等。地级行政区隶属于省、自治区、直辖市等省级行政区之下；下辖若干个县、区、县级市、旗等县级行政区。作为特例，东莞市、中山市、嘉峪关市、儋州市等四个地级市下辖街道办事处与乡镇，不辖县、区，因此也称作“直筒子（地级）市”。地级行政区的级别为正厅级，所以非正厅级的省直辖的行政区划不算作地级行政区，例如：湖北省辖的仙桃市、天门市、潜江市；河南省辖的济源市等等。直辖市下辖的区，虽然是正厅级，但未列入地级行政区的统计。
+县级行政区 县为中华人民共和国行政区划单位之一，县级行政区指行政地位与“县”相同的行政区划单位的总称，其管辖乡级行政区。为乡、镇的上一级行政区划单位。中华人民共和国成立后，随着行政督察区名称的变更，除各直辖市均隶属于专区（行政督察专区）、地区或地级行政区，现除各直辖市、海南省直管县外均为地级行政区的下一级行政区。
+按省、县、乡三级行政区划制度划分，县级行政区属于第二级行政区，为直辖市的下级行政区划单位。 按省、地、县、乡四级行政区划制度划分，县级行政区属于第三级行政区，属于省、自治区所辖地级行政区的下级行政区划单位。 乡级行政区 乡，中华人民共和国现行基层行政区划单位，区划层次介于县与村之间。“乡”为县、县级市下的主要行政区划类型之一。中国行政区划史上，“乡”一直为县的行政区划单元，因此现行处同一层次的区划单位归入乡级行政区。中国自改革开放以来，由于城市的快速扩张，行政区划制度出现了大的变革。1980年代以后“乡改镇”、“乡改街道”的现象越来越普遍。
+在乡级行政区划中，乡（包括镇）设有一级人民政府，属于基层政权；乡的行政区划单位为村（含民族村）。但很多乡设有社区，乡的区划单位设置与镇、街道看不出实质性差异。
+目的 解析所有数据文件，实现最终入库
+使用GeoTools实现
+数据库表结构：
+行政区划信息（district_info）
+id：自增Id（bigserial） name：行政区划名称 grade：行政区划等级（省级行政区：1， 地级行政区：2， 县级行政区：3，） code：行政区代码 center_point：中心点（geometry::point） bounds：行政区边界（geometry） 注：
+数据入库前审查，保证行政区代码唯一 使用grade区分省、市、县、乡镇 对于省、市、县code列，统一进行前6位截取（不满6位字符所在数据，直接丢弃），对于乡镇则统一进行前9位进行截取（不满9位字符所在数据，直接丢弃） 省级行政区 存在错乱数据，可以使用行政区代码识别（adcode）
+地级行政区 存在错乱数据，可以使用行政区代码识别（code），需要截取前6位
+县级行政区 存在错乱数据，可以使用行政区代码识别（code），需要截取前6位
+乡级行政区 成果 记录数：46652
+点数据为各个行政区中心点
+数据表 PostGIS CREATE EXTENSION IF NOT EXISTS postgis WITH SCHEMA public; 行政区划 -- -- Name: district_info_id_seq; Type: SEQUENCE; Schema: public; Owner: postgres -- CREATE SEQUENCE public.">
+<meta name="author" content="Fuyi">
+<link rel="canonical" href="https://fuyi-atlas.github.io/posts/program/micro-weather/005/">
+<link crossorigin="anonymous" href="/assets/css/stylesheet.a61ecc0df414536d559b3d0ca421e2b1de8f39b8a4910b32fedccecbc2c0d59c.css" integrity="sha256-ph7MDfQUU21Vmz0MpCHisd6PObikkQsy/tzOy8LA1Zw=" rel="preload stylesheet" as="style">
+<link rel="icon" href="https://fuyi-atlas.github.io/favicon.ico">
+<link rel="icon" type="image/png" sizes="16x16" href="https://fuyi-atlas.github.io/favicon-16x16.png">
+<link rel="icon" type="image/png" sizes="32x32" href="https://fuyi-atlas.github.io/favicon-32x32.png">
+<link rel="apple-touch-icon" href="https://fuyi-atlas.github.io/apple-touch-icon.png">
+<link rel="mask-icon" href="https://fuyi-atlas.github.io/safari-pinned-tab.svg">
+<meta name="theme-color" content="#2e2e33">
+<meta name="msapplication-TileColor" content="#2e2e33">
+<link rel="alternate" hreflang="en" href="https://fuyi-atlas.github.io/posts/program/micro-weather/005/">
+<noscript>
+    <style>
+        #theme-toggle,
+        .top-link {
+            display: none;
+        }
+
+    </style>
+    <style>
+        @media (prefers-color-scheme: dark) {
+            :root {
+                --theme: rgb(29, 30, 32);
+                --entry: rgb(46, 46, 51);
+                --primary: rgb(218, 218, 219);
+                --secondary: rgb(155, 156, 157);
+                --tertiary: rgb(65, 66, 68);
+                --content: rgb(196, 196, 197);
+                --code-block-bg: rgb(46, 46, 51);
+                --code-bg: rgb(55, 56, 62);
+                --border: rgb(51, 51, 51);
+            }
+
+            .list {
+                background: var(--theme);
+            }
+
+            .list:not(.dark)::-webkit-scrollbar-track {
+                background: 0 0;
+            }
+
+            .list:not(.dark)::-webkit-scrollbar-thumb {
+                border-color: var(--theme);
+            }
+        }
+
+    </style>
+</noscript><meta property="og:title" content="微天气—行政区划数据（一）" />
+<meta property="og:description" content="前言 微天气程序中存在如下几个功能需要使用到行政区划数据：
+城市列表，需要支持城市搜索 根据经纬度获区域（城市）的天气数据 地图坐标拾取并获取所处区域（城市）信息，同时获取天气数据 对于城市的天气数据，不使用和风天气的城市列表，而是自行维护，通过空间位置（经纬度）进行关联。对于城市位置的定义，本可以选择如行政中心或市中心，但我没有这样的数据，就直接用城市区划范围的中心点代替。不准确不重要，过程已经满足了，且后续是可以替换的。
+其实完全可以使用官方提供的城市数据和GeoAPI覆盖这些功能，但既然我是做GIS开发的，而且手里也有可以用作研究学习的数据，为啥不用呢。
+今天突然发现，其实我可以爬一下和风的数据，这样就可以拿到城市选择的经纬度数据了 @time 2023.10.10
+About 行政区划解析程序，输入shape文件，写入Postgresql.
+大体完整的四级行政区划数据组织
+github link: fuyi-district-parse
+数据情况 数据原源于网络，由于时间久远，我已经忘记了是如何获取到的
+名词解释 省级行政区 中国的一级行政区，或称国家一级行政区或省级行政区，是指直属中央政府管辖的行政区划，在历史上曾有不同的称呼。如：省、自治区、直辖市、特别行政区。
+地级行政区 地级行政区即“地区级别行政区”，是现行中华人民共和国行政区划中常规的第二级行政区划单位，包括地级市、地区、盟、自治州等。地级行政区隶属于省、自治区、直辖市等省级行政区之下；下辖若干个县、区、县级市、旗等县级行政区。作为特例，东莞市、中山市、嘉峪关市、儋州市等四个地级市下辖街道办事处与乡镇，不辖县、区，因此也称作“直筒子（地级）市”。地级行政区的级别为正厅级，所以非正厅级的省直辖的行政区划不算作地级行政区，例如：湖北省辖的仙桃市、天门市、潜江市；河南省辖的济源市等等。直辖市下辖的区，虽然是正厅级，但未列入地级行政区的统计。
+县级行政区 县为中华人民共和国行政区划单位之一，县级行政区指行政地位与“县”相同的行政区划单位的总称，其管辖乡级行政区。为乡、镇的上一级行政区划单位。中华人民共和国成立后，随着行政督察区名称的变更，除各直辖市均隶属于专区（行政督察专区）、地区或地级行政区，现除各直辖市、海南省直管县外均为地级行政区的下一级行政区。
+按省、县、乡三级行政区划制度划分，县级行政区属于第二级行政区，为直辖市的下级行政区划单位。 按省、地、县、乡四级行政区划制度划分，县级行政区属于第三级行政区，属于省、自治区所辖地级行政区的下级行政区划单位。 乡级行政区 乡，中华人民共和国现行基层行政区划单位，区划层次介于县与村之间。“乡”为县、县级市下的主要行政区划类型之一。中国行政区划史上，“乡”一直为县的行政区划单元，因此现行处同一层次的区划单位归入乡级行政区。中国自改革开放以来，由于城市的快速扩张，行政区划制度出现了大的变革。1980年代以后“乡改镇”、“乡改街道”的现象越来越普遍。
+在乡级行政区划中，乡（包括镇）设有一级人民政府，属于基层政权；乡的行政区划单位为村（含民族村）。但很多乡设有社区，乡的区划单位设置与镇、街道看不出实质性差异。
+目的 解析所有数据文件，实现最终入库
+使用GeoTools实现
+数据库表结构：
+行政区划信息（district_info）
+id：自增Id（bigserial） name：行政区划名称 grade：行政区划等级（省级行政区：1， 地级行政区：2， 县级行政区：3，） code：行政区代码 center_point：中心点（geometry::point） bounds：行政区边界（geometry） 注：
+数据入库前审查，保证行政区代码唯一 使用grade区分省、市、县、乡镇 对于省、市、县code列，统一进行前6位截取（不满6位字符所在数据，直接丢弃），对于乡镇则统一进行前9位进行截取（不满9位字符所在数据，直接丢弃） 省级行政区 存在错乱数据，可以使用行政区代码识别（adcode）
+地级行政区 存在错乱数据，可以使用行政区代码识别（code），需要截取前6位
+县级行政区 存在错乱数据，可以使用行政区代码识别（code），需要截取前6位
+乡级行政区 成果 记录数：46652
+点数据为各个行政区中心点
+数据表 PostGIS CREATE EXTENSION IF NOT EXISTS postgis WITH SCHEMA public; 行政区划 -- -- Name: district_info_id_seq; Type: SEQUENCE; Schema: public; Owner: postgres -- CREATE SEQUENCE public." />
+<meta property="og:type" content="article" />
+<meta property="og:url" content="https://fuyi-atlas.github.io/posts/program/micro-weather/005/" /><meta property="article:section" content="posts" />
+<meta property="article:published_time" content="2023-10-10T21:21:32+08:00" />
+<meta property="article:modified_time" content="2023-10-10T21:21:32+08:00" />
+
+<meta name="twitter:card" content="summary"/>
+<meta name="twitter:title" content="微天气—行政区划数据（一）"/>
+<meta name="twitter:description" content="前言 微天气程序中存在如下几个功能需要使用到行政区划数据：
+城市列表，需要支持城市搜索 根据经纬度获区域（城市）的天气数据 地图坐标拾取并获取所处区域（城市）信息，同时获取天气数据 对于城市的天气数据，不使用和风天气的城市列表，而是自行维护，通过空间位置（经纬度）进行关联。对于城市位置的定义，本可以选择如行政中心或市中心，但我没有这样的数据，就直接用城市区划范围的中心点代替。不准确不重要，过程已经满足了，且后续是可以替换的。
+其实完全可以使用官方提供的城市数据和GeoAPI覆盖这些功能，但既然我是做GIS开发的，而且手里也有可以用作研究学习的数据，为啥不用呢。
+今天突然发现，其实我可以爬一下和风的数据，这样就可以拿到城市选择的经纬度数据了 @time 2023.10.10
+About 行政区划解析程序，输入shape文件，写入Postgresql.
+大体完整的四级行政区划数据组织
+github link: fuyi-district-parse
+数据情况 数据原源于网络，由于时间久远，我已经忘记了是如何获取到的
+名词解释 省级行政区 中国的一级行政区，或称国家一级行政区或省级行政区，是指直属中央政府管辖的行政区划，在历史上曾有不同的称呼。如：省、自治区、直辖市、特别行政区。
+地级行政区 地级行政区即“地区级别行政区”，是现行中华人民共和国行政区划中常规的第二级行政区划单位，包括地级市、地区、盟、自治州等。地级行政区隶属于省、自治区、直辖市等省级行政区之下；下辖若干个县、区、县级市、旗等县级行政区。作为特例，东莞市、中山市、嘉峪关市、儋州市等四个地级市下辖街道办事处与乡镇，不辖县、区，因此也称作“直筒子（地级）市”。地级行政区的级别为正厅级，所以非正厅级的省直辖的行政区划不算作地级行政区，例如：湖北省辖的仙桃市、天门市、潜江市；河南省辖的济源市等等。直辖市下辖的区，虽然是正厅级，但未列入地级行政区的统计。
+县级行政区 县为中华人民共和国行政区划单位之一，县级行政区指行政地位与“县”相同的行政区划单位的总称，其管辖乡级行政区。为乡、镇的上一级行政区划单位。中华人民共和国成立后，随着行政督察区名称的变更，除各直辖市均隶属于专区（行政督察专区）、地区或地级行政区，现除各直辖市、海南省直管县外均为地级行政区的下一级行政区。
+按省、县、乡三级行政区划制度划分，县级行政区属于第二级行政区，为直辖市的下级行政区划单位。 按省、地、县、乡四级行政区划制度划分，县级行政区属于第三级行政区，属于省、自治区所辖地级行政区的下级行政区划单位。 乡级行政区 乡，中华人民共和国现行基层行政区划单位，区划层次介于县与村之间。“乡”为县、县级市下的主要行政区划类型之一。中国行政区划史上，“乡”一直为县的行政区划单元，因此现行处同一层次的区划单位归入乡级行政区。中国自改革开放以来，由于城市的快速扩张，行政区划制度出现了大的变革。1980年代以后“乡改镇”、“乡改街道”的现象越来越普遍。
+在乡级行政区划中，乡（包括镇）设有一级人民政府，属于基层政权；乡的行政区划单位为村（含民族村）。但很多乡设有社区，乡的区划单位设置与镇、街道看不出实质性差异。
+目的 解析所有数据文件，实现最终入库
+使用GeoTools实现
+数据库表结构：
+行政区划信息（district_info）
+id：自增Id（bigserial） name：行政区划名称 grade：行政区划等级（省级行政区：1， 地级行政区：2， 县级行政区：3，） code：行政区代码 center_point：中心点（geometry::point） bounds：行政区边界（geometry） 注：
+数据入库前审查，保证行政区代码唯一 使用grade区分省、市、县、乡镇 对于省、市、县code列，统一进行前6位截取（不满6位字符所在数据，直接丢弃），对于乡镇则统一进行前9位进行截取（不满9位字符所在数据，直接丢弃） 省级行政区 存在错乱数据，可以使用行政区代码识别（adcode）
+地级行政区 存在错乱数据，可以使用行政区代码识别（code），需要截取前6位
+县级行政区 存在错乱数据，可以使用行政区代码识别（code），需要截取前6位
+乡级行政区 成果 记录数：46652
+点数据为各个行政区中心点
+数据表 PostGIS CREATE EXTENSION IF NOT EXISTS postgis WITH SCHEMA public; 行政区划 -- -- Name: district_info_id_seq; Type: SEQUENCE; Schema: public; Owner: postgres -- CREATE SEQUENCE public."/>
+
+
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "BreadcrumbList",
+  "itemListElement": [
+    {
+      "@type": "ListItem",
+      "position":  1 ,
+      "name": "Posts",
+      "item": "https://fuyi-atlas.github.io/posts/"
+    }, 
+    {
+      "@type": "ListItem",
+      "position":  2 ,
+      "name": "微天气—行政区划数据（一）",
+      "item": "https://fuyi-atlas.github.io/posts/program/micro-weather/005/"
+    }
+  ]
+}
+</script>
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "BlogPosting",
+  "headline": "微天气—行政区划数据（一）",
+  "name": "微天气—行政区划数据（一）",
+  "description": "前言 微天气程序中存在如下几个功能需要使用到行政区划数据：\n城市列表，需要支持城市搜索 根据经纬度获区域（城市）的天气数据 地图坐标拾取并获取所处区域（城市）信息，同时获取天气数据 对于城市的天气数据，不使用和风天气的城市列表，而是自行维护，通过空间位置（经纬度）进行关联。对于城市位置的定义，本可以选择如行政中心或市中心，但我没有这样的数据，就直接用城市区划范围的中心点代替。不准确不重要，过程已经满足了，且后续是可以替换的。\n其实完全可以使用官方提供的城市数据和GeoAPI覆盖这些功能，但既然我是做GIS开发的，而且手里也有可以用作研究学习的数据，为啥不用呢。\n今天突然发现，其实我可以爬一下和风的数据，这样就可以拿到城市选择的经纬度数据了 @time 2023.10.10\nAbout 行政区划解析程序，输入shape文件，写入Postgresql.\n大体完整的四级行政区划数据组织\ngithub link: fuyi-district-parse\n数据情况 数据原源于网络，由于时间久远，我已经忘记了是如何获取到的\n名词解释 省级行政区 中国的一级行政区，或称国家一级行政区或省级行政区，是指直属中央政府管辖的行政区划，在历史上曾有不同的称呼。如：省、自治区、直辖市、特别行政区。\n地级行政区 地级行政区即“地区级别行政区”，是现行中华人民共和国行政区划中常规的第二级行政区划单位，包括地级市、地区、盟、自治州等。地级行政区隶属于省、自治区、直辖市等省级行政区之下；下辖若干个县、区、县级市、旗等县级行政区。作为特例，东莞市、中山市、嘉峪关市、儋州市等四个地级市下辖街道办事处与乡镇，不辖县、区，因此也称作“直筒子（地级）市”。地级行政区的级别为正厅级，所以非正厅级的省直辖的行政区划不算作地级行政区，例如：湖北省辖的仙桃市、天门市、潜江市；河南省辖的济源市等等。直辖市下辖的区，虽然是正厅级，但未列入地级行政区的统计。\n县级行政区 县为中华人民共和国行政区划单位之一，县级行政区指行政地位与“县”相同的行政区划单位的总称，其管辖乡级行政区。为乡、镇的上一级行政区划单位。中华人民共和国成立后，随着行政督察区名称的变更，除各直辖市均隶属于专区（行政督察专区）、地区或地级行政区，现除各直辖市、海南省直管县外均为地级行政区的下一级行政区。\n按省、县、乡三级行政区划制度划分，县级行政区属于第二级行政区，为直辖市的下级行政区划单位。 按省、地、县、乡四级行政区划制度划分，县级行政区属于第三级行政区，属于省、自治区所辖地级行政区的下级行政区划单位。 乡级行政区 乡，中华人民共和国现行基层行政区划单位，区划层次介于县与村之间。“乡”为县、县级市下的主要行政区划类型之一。中国行政区划史上，“乡”一直为县的行政区划单元，因此现行处同一层次的区划单位归入乡级行政区。中国自改革开放以来，由于城市的快速扩张，行政区划制度出现了大的变革。1980年代以后“乡改镇”、“乡改街道”的现象越来越普遍。\n在乡级行政区划中，乡（包括镇）设有一级人民政府，属于基层政权；乡的行政区划单位为村（含民族村）。但很多乡设有社区，乡的区划单位设置与镇、街道看不出实质性差异。\n目的 解析所有数据文件，实现最终入库\n使用GeoTools实现\n数据库表结构：\n行政区划信息（district_info）\nid：自增Id（bigserial） name：行政区划名称 grade：行政区划等级（省级行政区：1， 地级行政区：2， 县级行政区：3，） code：行政区代码 center_point：中心点（geometry::point） bounds：行政区边界（geometry） 注：\n数据入库前审查，保证行政区代码唯一 使用grade区分省、市、县、乡镇 对于省、市、县code列，统一进行前6位截取（不满6位字符所在数据，直接丢弃），对于乡镇则统一进行前9位进行截取（不满9位字符所在数据，直接丢弃） 省级行政区 存在错乱数据，可以使用行政区代码识别（adcode）\n地级行政区 存在错乱数据，可以使用行政区代码识别（code），需要截取前6位\n县级行政区 存在错乱数据，可以使用行政区代码识别（code），需要截取前6位\n乡级行政区 成果 记录数：46652\n点数据为各个行政区中心点\n数据表 PostGIS CREATE EXTENSION IF NOT EXISTS postgis WITH SCHEMA public; 行政区划 -- -- Name: district_info_id_seq; Type: SEQUENCE; Schema: public; Owner: postgres -- CREATE SEQUENCE public.",
+  "keywords": [
+    "weather"
+  ],
+  "articleBody": "前言 微天气程序中存在如下几个功能需要使用到行政区划数据：\n城市列表，需要支持城市搜索 根据经纬度获区域（城市）的天气数据 地图坐标拾取并获取所处区域（城市）信息，同时获取天气数据 对于城市的天气数据，不使用和风天气的城市列表，而是自行维护，通过空间位置（经纬度）进行关联。对于城市位置的定义，本可以选择如行政中心或市中心，但我没有这样的数据，就直接用城市区划范围的中心点代替。不准确不重要，过程已经满足了，且后续是可以替换的。\n其实完全可以使用官方提供的城市数据和GeoAPI覆盖这些功能，但既然我是做GIS开发的，而且手里也有可以用作研究学习的数据，为啥不用呢。\n今天突然发现，其实我可以爬一下和风的数据，这样就可以拿到城市选择的经纬度数据了 @time 2023.10.10\nAbout 行政区划解析程序，输入shape文件，写入Postgresql.\n大体完整的四级行政区划数据组织\ngithub link: fuyi-district-parse\n数据情况 数据原源于网络，由于时间久远，我已经忘记了是如何获取到的\n名词解释 省级行政区 中国的一级行政区，或称国家一级行政区或省级行政区，是指直属中央政府管辖的行政区划，在历史上曾有不同的称呼。如：省、自治区、直辖市、特别行政区。\n地级行政区 地级行政区即“地区级别行政区”，是现行中华人民共和国行政区划中常规的第二级行政区划单位，包括地级市、地区、盟、自治州等。地级行政区隶属于省、自治区、直辖市等省级行政区之下；下辖若干个县、区、县级市、旗等县级行政区。作为特例，东莞市、中山市、嘉峪关市、儋州市等四个地级市下辖街道办事处与乡镇，不辖县、区，因此也称作“直筒子（地级）市”。地级行政区的级别为正厅级，所以非正厅级的省直辖的行政区划不算作地级行政区，例如：湖北省辖的仙桃市、天门市、潜江市；河南省辖的济源市等等。直辖市下辖的区，虽然是正厅级，但未列入地级行政区的统计。\n县级行政区 县为中华人民共和国行政区划单位之一，县级行政区指行政地位与“县”相同的行政区划单位的总称，其管辖乡级行政区。为乡、镇的上一级行政区划单位。中华人民共和国成立后，随着行政督察区名称的变更，除各直辖市均隶属于专区（行政督察专区）、地区或地级行政区，现除各直辖市、海南省直管县外均为地级行政区的下一级行政区。\n按省、县、乡三级行政区划制度划分，县级行政区属于第二级行政区，为直辖市的下级行政区划单位。 按省、地、县、乡四级行政区划制度划分，县级行政区属于第三级行政区，属于省、自治区所辖地级行政区的下级行政区划单位。 乡级行政区 乡，中华人民共和国现行基层行政区划单位，区划层次介于县与村之间。“乡”为县、县级市下的主要行政区划类型之一。中国行政区划史上，“乡”一直为县的行政区划单元，因此现行处同一层次的区划单位归入乡级行政区。中国自改革开放以来，由于城市的快速扩张，行政区划制度出现了大的变革。1980年代以后“乡改镇”、“乡改街道”的现象越来越普遍。\n在乡级行政区划中，乡（包括镇）设有一级人民政府，属于基层政权；乡的行政区划单位为村（含民族村）。但很多乡设有社区，乡的区划单位设置与镇、街道看不出实质性差异。\n目的 解析所有数据文件，实现最终入库\n使用GeoTools实现\n数据库表结构：\n行政区划信息（district_info）\nid：自增Id（bigserial） name：行政区划名称 grade：行政区划等级（省级行政区：1， 地级行政区：2， 县级行政区：3，） code：行政区代码 center_point：中心点（geometry::point） bounds：行政区边界（geometry） 注：\n数据入库前审查，保证行政区代码唯一 使用grade区分省、市、县、乡镇 对于省、市、县code列，统一进行前6位截取（不满6位字符所在数据，直接丢弃），对于乡镇则统一进行前9位进行截取（不满9位字符所在数据，直接丢弃） 省级行政区 存在错乱数据，可以使用行政区代码识别（adcode）\n地级行政区 存在错乱数据，可以使用行政区代码识别（code），需要截取前6位\n县级行政区 存在错乱数据，可以使用行政区代码识别（code），需要截取前6位\n乡级行政区 成果 记录数：46652\n点数据为各个行政区中心点\n数据表 PostGIS CREATE EXTENSION IF NOT EXISTS postgis WITH SCHEMA public; 行政区划 -- -- Name: district_info_id_seq; Type: SEQUENCE; Schema: public; Owner: postgres -- CREATE SEQUENCE public.district_info_id_seq START WITH 1 INCREMENT BY 1 NO MINVALUE NO MAXVALUE CACHE 1; ALTER TABLE public.district_info_id_seq OWNER TO postgres; -- Table: public.district_info -- DROP TABLE IF EXISTS public.district_info; CREATE TABLE IF NOT EXISTS public.district_info ( name character varying COLLATE pg_catalog.\"default\", grade integer, code character varying COLLATE pg_catalog.\"default\", center_point geometry(Point,4326), bounds geometry(MultiPolygon,4326), create_time timestamp without time zone DEFAULT CURRENT_TIMESTAMP, uid character varying COLLATE pg_catalog.\"default\", id bigint NOT NULL DEFAULT nextval('district_info_id_seq'::regclass), CONSTRAINT district_info_pkey PRIMARY KEY (id) ) TABLESPACE pg_default; ALTER TABLE IF EXISTS public.district_info OWNER to postgres; COMMENT ON TABLE public.district_info IS '行政区划信息表'; COMMENT ON COLUMN public.district_info.name IS '行政区名称'; COMMENT ON COLUMN public.district_info.grade IS '行政区等级，目前支持：（1：省级行政区，2；市级行政区，3：县级行政区，4：乡级行政区）'; COMMENT ON COLUMN public.district_info.code IS '行政区编码。其中，县级与县级以上行政区编码为6位，县级以下（即乡级）行政区编码为9位'; COMMENT ON COLUMN public.district_info.center_point IS '行政区中心点，数据坐标系：4326'; COMMENT ON COLUMN public.district_info.bounds IS '行政区边界，数据坐标系：4326'; COMMENT ON COLUMN public.district_info.uid IS '唯一标识，便于数据迁移'; -- -- Name: district_info_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: postgres -- ALTER SEQUENCE public.district_info_id_seq OWNED BY public.district_info.id; 日志 ... org.fuyi.district.DistrictParseApplication /home/fuyi/GeoDatabase/China ------------------- /home/fuyi/GeoDatabase/China/重庆市/重庆市_市界.shp current element size: 12 ------------------- /home/fuyi/GeoDatabase/China/重庆市/重庆市_省界.shp current element size: 4 ------------------- /home/fuyi/GeoDatabase/China/重庆市/重庆市_县界.shp current element size: 75 ------------------- /home/fuyi/GeoDatabase/China/重庆市/重庆市_乡镇边界.shp current element size: 1218 ------------------- /home/fuyi/GeoDatabase/China/新疆自治区/新疆自治区_省界.shp current element size: 4 ------------------- /home/fuyi/GeoDatabase/China/新疆自治区/新疆自治区_县界.shp current element size: 111 ------------------- /home/fuyi/GeoDatabase/China/新疆自治区/新疆自治区_乡镇边界.shp current element size: 1410 ------------------- /home/fuyi/GeoDatabase/China/新疆自治区/新疆自治区_市界.shp current element size: 28 ------------------- /home/fuyi/GeoDatabase/China/湖北省/湖北省_市界.shp current element size: 28 ------------------- /home/fuyi/GeoDatabase/China/湖北省/湖北省_省界.shp current element size: 6 ------------------- /home/fuyi/GeoDatabase/China/湖北省/湖北省_县界.shp current element size: 150 ------------------- /home/fuyi/GeoDatabase/China/湖北省/湖北省_乡镇边界.shp current element size: 1679 ------------------- /home/fuyi/GeoDatabase/China/陕西省/陕西省_市界.shp current element size: 24 ------------------- /home/fuyi/GeoDatabase/China/陕西省/陕西省_县界.shp current element size: 158 ------------------- /home/fuyi/GeoDatabase/China/陕西省/陕西省_省界.shp current element size: 7 ------------------- /home/fuyi/GeoDatabase/China/陕西省/陕西省_乡镇边界.shp current element size: 1559 ------------------- /home/fuyi/GeoDatabase/China/广东省/广东省_省界.shp current element size: 7 ------------------- /home/fuyi/GeoDatabase/China/广东省/广东省_县界.shp current element size: 160 ------------------- /home/fuyi/GeoDatabase/China/广东省/广东省_市界.shp current element size: 31 ------------------- /home/fuyi/GeoDatabase/China/广东省/广东省_乡镇边界.shp current element size: 1902 ------------------- /home/fuyi/GeoDatabase/China/云南省/云南省_乡镇边界.shp current element size: 1594 ------------------- /home/fuyi/GeoDatabase/China/云南省/云南省_省界.shp current element size: 5 ------------------- /home/fuyi/GeoDatabase/China/云南省/云南省_县界.shp current element size: 165 ------------------- /home/fuyi/GeoDatabase/China/云南省/云南省_市界.shp current element size: 27 ------------------- /home/fuyi/GeoDatabase/China/宁夏省/宁夏省_市界.shp current element size: 12 ------------------- /home/fuyi/GeoDatabase/China/宁夏省/宁夏省_乡镇边界.shp current element size: 326 ------------------- /home/fuyi/GeoDatabase/China/宁夏省/宁夏省_县界.shp current element size: 36 ------------------- /home/fuyi/GeoDatabase/China/宁夏省/宁夏省_省界.shp current element size: 4 ------------------- /home/fuyi/GeoDatabase/China/内蒙古自治区/内蒙古自治区_乡镇边界.shp current element size: 1498 ------------------- /home/fuyi/GeoDatabase/China/内蒙古自治区/内蒙古自治区_市界.shp current element size: 35 ------------------- /home/fuyi/GeoDatabase/China/内蒙古自治区/内蒙古自治区_省界.shp current element size: 7 ------------------- /home/fuyi/GeoDatabase/China/内蒙古自治区/内蒙古自治区_县界.shp current element size: 173 ------------------- /home/fuyi/GeoDatabase/China/海南省/海南省_县界.shp current element size: 27 ------------------- /home/fuyi/GeoDatabase/China/海南省/海南省_省界.shp current element size: 1 ------------------- /home/fuyi/GeoDatabase/China/海南省/海南省_市界.shp current element size: 19 ------------------- /home/fuyi/GeoDatabase/China/海南省/海南省_乡镇边界.shp current element size: 214 ------------------- /home/fuyi/GeoDatabase/China/山东省/山东省_省界.shp current element size: 5 ------------------- /home/fuyi/GeoDatabase/China/山东省/山东省_乡镇边界.shp current element size: 1984 ------------------- /home/fuyi/GeoDatabase/China/山东省/山东省_市界.shp current element size: 27 ------------------- /home/fuyi/GeoDatabase/China/山东省/山东省_县界.shp current element size: 167 ------------------- /home/fuyi/GeoDatabase/China/浙江省/浙江省_省界.shp current element size: 6 ------------------- /home/fuyi/GeoDatabase/China/浙江省/浙江省_市界.shp current element size: 18 ------------------- /home/fuyi/GeoDatabase/China/浙江省/浙江省_县界.shp current element size: 110 ------------------- /home/fuyi/GeoDatabase/China/浙江省/浙江省_乡镇边界.shp current element size: 1431 ------------------- /home/fuyi/GeoDatabase/China/青海省/青海省_省界.shp current element size: 5 ------------------- /home/fuyi/GeoDatabase/China/青海省/青海省_乡镇边界.shp current element size: 470 ------------------- /home/fuyi/GeoDatabase/China/青海省/青海省_县界.shp current element size: 72 ------------------- /home/fuyi/GeoDatabase/China/青海省/青海省_市界.shp current element size: 19 ------------------- /home/fuyi/GeoDatabase/China/江苏省/江苏省_乡镇边界.shp current element size: 1634 ------------------- /home/fuyi/GeoDatabase/China/江苏省/江苏省_省界.shp current element size: 5 ------------------- /home/fuyi/GeoDatabase/China/江苏省/江苏省_市界.shp current element size: 26 ------------------- /home/fuyi/GeoDatabase/China/江苏省/江苏省_县界.shp current element size: 138 ------------------- /home/fuyi/GeoDatabase/China/江西省/江西省_市界.shp current element size: 27 ------------------- /home/fuyi/GeoDatabase/China/江西省/江西省_乡镇边界.shp current element size: 1927 ------------------- /home/fuyi/GeoDatabase/China/江西省/江西省_县界.shp current element size: 137 ------------------- /home/fuyi/GeoDatabase/China/江西省/江西省_省界.shp current element size: 7 ------------------- /home/fuyi/GeoDatabase/China/西藏自治区/西藏自治区_县界.shp current element size: 91 ------------------- /home/fuyi/GeoDatabase/China/西藏自治区/西藏自治区_省界.shp current element size: 5 ------------------- /home/fuyi/GeoDatabase/China/西藏自治区/西藏自治区_市界.shp current element size: 14 ------------------- /home/fuyi/GeoDatabase/China/西藏自治区/西藏自治区_乡镇边界.shp current element size: 737 ------------------- /home/fuyi/GeoDatabase/China/天津市/天津市_县界.shp current element size: 32 ------------------- /home/fuyi/GeoDatabase/China/天津市/天津市_省界.shp current element size: 2 ------------------- /home/fuyi/GeoDatabase/China/天津市/天津市_市界.shp current element size: 4 ------------------- /home/fuyi/GeoDatabase/China/天津市/天津市_乡镇边界.shp current element size: 360 ------------------- /home/fuyi/GeoDatabase/China/台湾省/台湾省_村名.shp current element size: 0 ------------------- /home/fuyi/GeoDatabase/China/台湾省/台湾省_乡镇名称.shp current element size: 0 ------------------- /home/fuyi/GeoDatabase/China/台湾省/台湾省_县名称.shp current element size: 0 ------------------- /home/fuyi/GeoDatabase/China/广西省/广西省_省界.shp current element size: 3 ------------------- /home/fuyi/GeoDatabase/China/广西省/广西省_市界.shp current element size: 25 ------------------- /home/fuyi/GeoDatabase/China/广西省/广西省_县界.shp current element size: 142 ------------------- /home/fuyi/GeoDatabase/China/广西省/广西省_乡镇边界.shp current element size: 1433 ------------------- /home/fuyi/GeoDatabase/China/香港特别行政区/香港特别行政区_乡镇边界.shp current element size: 8 ------------------- /home/fuyi/GeoDatabase/China/香港特别行政区/香港特别行政区_县界.shp current element size: 21 ------------------- /home/fuyi/GeoDatabase/China/香港特别行政区/香港特别行政区_省界.shp current element size: 2 ------------------- /home/fuyi/GeoDatabase/China/香港特别行政区/香港特别行政区_市界.shp current element size: 1 ------------------- /home/fuyi/GeoDatabase/China/安徽省/安徽省_市界.shp current element size: 34 ------------------- /home/fuyi/GeoDatabase/China/安徽省/安徽省_乡镇边界.shp current element size: 1832 ------------------- /home/fuyi/GeoDatabase/China/安徽省/安徽省_省界.shp current element size: 6 ------------------- /home/fuyi/GeoDatabase/China/安徽省/安徽省_县界.shp current element size: 149 ------------------- /home/fuyi/GeoDatabase/China/河南省/河南省_市界.shp current element size: 38 ------------------- /home/fuyi/GeoDatabase/China/河南省/河南省_乡镇边界.shp current element size: 2722 ------------------- /home/fuyi/GeoDatabase/China/河南省/河南省_县界.shp current element size: 209 ------------------- /home/fuyi/GeoDatabase/China/河南省/河南省_省界.shp current element size: 7 ------------------- /home/fuyi/GeoDatabase/China/黑龙江省/黑龙江省_市界.shp current element size: 20 ------------------- /home/fuyi/GeoDatabase/China/黑龙江省/黑龙江省_省界.shp current element size: 3 ------------------- /home/fuyi/GeoDatabase/China/黑龙江省/黑龙江省_县界.shp current element size: 150 ------------------- /home/fuyi/GeoDatabase/China/黑龙江省/黑龙江省_乡镇边界.shp current element size: 1874 ------------------- /home/fuyi/GeoDatabase/China/澳门特别行政区/澳门特别行政区_市界.shp current element size: 1 ------------------- /home/fuyi/GeoDatabase/China/澳门特别行政区/澳门特别行政区_省界.shp current element size: 2 ------------------- /home/fuyi/GeoDatabase/China/澳门特别行政区/澳门特别行政区_乡镇边界.shp current element size: 4 ------------------- /home/fuyi/GeoDatabase/China/澳门特别行政区/澳门特别行政区_县界.shp current element size: 9 ------------------- /home/fuyi/GeoDatabase/China/吉林省/吉林省_省界.shp current element size: 4 ------------------- /home/fuyi/GeoDatabase/China/吉林省/吉林省_县界.shp current element size: 82 ------------------- /home/fuyi/GeoDatabase/China/吉林省/吉林省_乡镇边界.shp current element size: 1134 ------------------- /home/fuyi/GeoDatabase/China/吉林省/吉林省_市界.shp current element size: 19 ------------------- /home/fuyi/GeoDatabase/China/北京市/北京市_县界.shp current element size: 32 ------------------- /home/fuyi/GeoDatabase/China/北京市/北京市_乡镇边界.shp current element size: 395 ------------------- /home/fuyi/GeoDatabase/China/北京市/北京市_市界.shp current element size: 4 ------------------- /home/fuyi/GeoDatabase/China/北京市/北京市_省界.shp current element size: 3 ------------------- /home/fuyi/GeoDatabase/China/四川省/四川省_乡镇边界.shp current element size: 4933 ------------------- /home/fuyi/GeoDatabase/China/四川省/四川省_市界.shp current element size: 32 ------------------- /home/fuyi/GeoDatabase/China/四川省/四川省_省界.shp current element size: 7 ------------------- /home/fuyi/GeoDatabase/China/四川省/四川省_县界.shp current element size: 237 ------------------- /home/fuyi/GeoDatabase/China/上海市/上海市_省界.shp current element size: 3 ------------------- /home/fuyi/GeoDatabase/China/上海市/上海市_乡镇边界.shp current element size: 251 ------------------- /home/fuyi/GeoDatabase/China/上海市/上海市_县界.shp current element size: 24 ------------------- /home/fuyi/GeoDatabase/China/上海市/上海市_市界.shp current element size: 4 ------------------- /home/fuyi/GeoDatabase/China/甘肃省/甘肃省_县界.shp current element size: 137 ------------------- /home/fuyi/GeoDatabase/China/甘肃省/甘肃省_市界.shp current element size: 33 ------------------- /home/fuyi/GeoDatabase/China/甘肃省/甘肃省_省界.shp current element size: 7 ------------------- /home/fuyi/GeoDatabase/China/甘肃省/甘肃省_乡镇边界.shp current element size: 1601 ------------------- /home/fuyi/GeoDatabase/China/福建省/福建省_市界.shp current element size: 18 ------------------- /home/fuyi/GeoDatabase/China/福建省/福建省_乡镇边界.shp current element size: 1272 ------------------- /home/fuyi/GeoDatabase/China/福建省/福建省_省界.shp current element size: 4 ------------------- /home/fuyi/GeoDatabase/China/福建省/福建省_县界.shp current element size: 109 ------------------- /home/fuyi/GeoDatabase/China/河北省/河北省_市界.shp current element size: 26 ------------------- /home/fuyi/GeoDatabase/China/河北省/河北省_乡镇边界.shp current element size: 2574 ------------------- /home/fuyi/GeoDatabase/China/河北省/河北省_省界.shp current element size: 8 ------------------- /home/fuyi/GeoDatabase/China/河北省/河北省_县界.shp current element size: 225 ------------------- /home/fuyi/GeoDatabase/China/贵州省/贵州省_乡镇边界.shp current element size: 1791 ------------------- /home/fuyi/GeoDatabase/China/贵州省/贵州省_县界.shp current element size: 122 ------------------- /home/fuyi/GeoDatabase/China/贵州省/贵州省_市界.shp current element size: 16 ------------------- /home/fuyi/GeoDatabase/China/贵州省/贵州省_省界.shp current element size: 5 ------------------- /home/fuyi/GeoDatabase/China/湖南省/湖南省_省界.shp current element size: 6 ------------------- /home/fuyi/GeoDatabase/China/湖南省/湖南省_市界.shp current element size: 28 ------------------- /home/fuyi/GeoDatabase/China/湖南省/湖南省_乡镇边界.shp current element size: 2662 ------------------- /home/fuyi/GeoDatabase/China/湖南省/湖南省_县界.shp current element size: 169 ------------------- /home/fuyi/GeoDatabase/China/山西省/山西省_县界.shp current element size: 154 ------------------- /home/fuyi/GeoDatabase/China/山西省/山西省_市界.shp current element size: 28 ------------------- /home/fuyi/GeoDatabase/China/山西省/山西省_乡镇边界.shp current element size: 1580 ------------------- /home/fuyi/GeoDatabase/China/山西省/山西省_省界.shp current element size: 5 ------------------- /home/fuyi/GeoDatabase/China/辽宁省/辽宁省_县界.shp current element size: 123 ------------------- /home/fuyi/GeoDatabase/China/辽宁省/辽宁省_市界.shp current element size: 21 ------------------- /home/fuyi/GeoDatabase/China/辽宁省/辽宁省_省界.shp current element size: 4 ------------------- /home/fuyi/GeoDatabase/China/辽宁省/辽宁省_乡镇边界.shp current element size: 1659 Process finished with exit code 0 参考 wiki-中华人民共和国行政区划代码 geotools-shapeplugin -- alter table district_info alter column center_point -- type Geometry(Point, 4326) USING ST_SetSRID(center_point, 4326); -- ALTER TABLE district_info ALTER COLUMN bounds TYPE Geometry(MultiPolygon, 4326) USING ST_SetSRID(bounds, 4326); select st_astext(center_point), * from district_info where grade = 1 order by id limit 1000 ; select st_area(bounds) as area, * from district_info where grade = 1 and name like '%海南%'; -- delete from district_info; select code, count(*) as _count from district_info group by code order by _count desc; select * from district_info; ",
+  "wordCount" : "1130",
+  "inLanguage": "en",
+  "datePublished": "2023-10-10T21:21:32+08:00",
+  "dateModified": "2023-10-10T21:21:32+08:00",
+  "author":{
+    "@type": "Person",
+    "name": "Fuyi"
+  },
+  "mainEntityOfPage": {
+    "@type": "WebPage",
+    "@id": "https://fuyi-atlas.github.io/posts/program/micro-weather/005/"
+  },
+  "publisher": {
+    "@type": "Organization",
+    "name": "Fuyi Atlas",
+    "logo": {
+      "@type": "ImageObject",
+      "url": "https://fuyi-atlas.github.io/favicon.ico"
+    }
+  }
+}
+</script>
+</head>
+
+<body class="" id="top">
+<script>
+    if (localStorage.getItem("pref-theme") === "dark") {
+        document.body.classList.add('dark');
+    } else if (localStorage.getItem("pref-theme") === "light") {
+        document.body.classList.remove('dark')
+    } else if (window.matchMedia('(prefers-color-scheme: dark)').matches) {
+        document.body.classList.add('dark');
+    }
+
+</script>
+
+<header class="header">
+    <nav class="nav">
+        <div class="logo">
+            <a href="https://fuyi-atlas.github.io/" accesskey="h" title="Fuyi Atlas (Alt + H)">Fuyi Atlas</a>
+            <div class="logo-switches">
+                <button id="theme-toggle" accesskey="t" title="(Alt + T)">
+                    <svg id="moon" xmlns="http://www.w3.org/2000/svg" width="24" height="18" viewBox="0 0 24 24"
+                        fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"
+                        stroke-linejoin="round">
+                        <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path>
+                    </svg>
+                    <svg id="sun" xmlns="http://www.w3.org/2000/svg" width="24" height="18" viewBox="0 0 24 24"
+                        fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"
+                        stroke-linejoin="round">
+                        <circle cx="12" cy="12" r="5"></circle>
+                        <line x1="12" y1="1" x2="12" y2="3"></line>
+                        <line x1="12" y1="21" x2="12" y2="23"></line>
+                        <line x1="4.22" y1="4.22" x2="5.64" y2="5.64"></line>
+                        <line x1="18.36" y1="18.36" x2="19.78" y2="19.78"></line>
+                        <line x1="1" y1="12" x2="3" y2="12"></line>
+                        <line x1="21" y1="12" x2="23" y2="12"></line>
+                        <line x1="4.22" y1="19.78" x2="5.64" y2="18.36"></line>
+                        <line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line>
+                    </svg>
+                </button>
+                <ul class="lang-switch"><li>|</li>
+                    <li>
+                        <a href="https://fuyi-atlas.github.io/zh/" title="Chinese"
+                            aria-label="Chinese">Zh</a>
+                    </li>
+                </ul>
+            </div>
+        </div>
+        <ul id="menu">
+            <li>
+                <a href="https://fuyi-atlas.github.io/archives/" title="Archive">
+                    <span>Archive</span>
+                </a>
+            </li>
+            <li>
+                <a href="https://fuyi-atlas.github.io/search/" title="Search (Alt &#43; /)" accesskey=/>
+                    <span>Search</span>
+                </a>
+            </li>
+            <li>
+                <a href="https://fuyi-atlas.github.io/categories/" title="Categories">
+                    <span>Categories</span>
+                </a>
+            </li>
+            <li>
+                <a href="https://fuyi-atlas.github.io/tags/" title="Tags">
+                    <span>Tags</span>
+                </a>
+            </li>
+        </ul>
+    </nav>
+</header>
+<main class="main">
+
+<article class="post-single">
+  <header class="post-header">
+    <div class="breadcrumbs"><a href="https://fuyi-atlas.github.io/">Home</a>&nbsp;»&nbsp;<a href="https://fuyi-atlas.github.io/posts/">Posts</a></div>
+    <h1 class="post-title entry-hint-parent">
+      微天气—行政区划数据（一）
+    </h1>
+    <div class="post-meta"><span title='2023-10-10 21:21:32 +0800 CST'>October 10, 2023</span>&nbsp;·&nbsp;6 min&nbsp;·&nbsp;Fuyi
+
+</div>
+  </header> <div class="toc">
+    <details >
+        <summary accesskey="c" title="(Alt + C)">
+            <span class="details">Table of Contents</span>
+        </summary>
+
+        <div class="inner"><ul>
+                <li>
+                    <a href="#%e5%89%8d%e8%a8%80" aria-label="前言">前言</a></li>
+                <li>
+                    <a href="#about" aria-label="About">About</a></li>
+                <li>
+                    <a href="#%e6%95%b0%e6%8d%ae%e6%83%85%e5%86%b5" aria-label="数据情况">数据情况</a></li>
+                <li>
+                    <a href="#%e5%90%8d%e8%af%8d%e8%a7%a3%e9%87%8a" aria-label="名词解释">名词解释</a><ul>
+                        
+                <li>
+                    <a href="#%e7%9c%81%e7%ba%a7%e8%a1%8c%e6%94%bf%e5%8c%ba" aria-label="省级行政区">省级行政区</a></li>
+                <li>
+                    <a href="#%e5%9c%b0%e7%ba%a7%e8%a1%8c%e6%94%bf%e5%8c%ba" aria-label="地级行政区">地级行政区</a></li>
+                <li>
+                    <a href="#%e5%8e%bf%e7%ba%a7%e8%a1%8c%e6%94%bf%e5%8c%ba" aria-label="县级行政区">县级行政区</a></li>
+                <li>
+                    <a href="#%e4%b9%a1%e7%ba%a7%e8%a1%8c%e6%94%bf%e5%8c%ba" aria-label="乡级行政区">乡级行政区</a></li></ul>
+                </li>
+                <li>
+                    <a href="#%e7%9b%ae%e7%9a%84" aria-label="目的">目的</a></li>
+                <li>
+                    <a href="#%e7%9c%81%e7%ba%a7%e8%a1%8c%e6%94%bf%e5%8c%ba-1" aria-label="省级行政区">省级行政区</a></li>
+                <li>
+                    <a href="#%e5%9c%b0%e7%ba%a7%e8%a1%8c%e6%94%bf%e5%8c%ba-1" aria-label="地级行政区">地级行政区</a></li>
+                <li>
+                    <a href="#%e5%8e%bf%e7%ba%a7%e8%a1%8c%e6%94%bf%e5%8c%ba-1" aria-label="县级行政区">县级行政区</a></li>
+                <li>
+                    <a href="#%e4%b9%a1%e7%ba%a7%e8%a1%8c%e6%94%bf%e5%8c%ba-1" aria-label="乡级行政区">乡级行政区</a></li>
+                <li>
+                    <a href="#%e6%88%90%e6%9e%9c" aria-label="成果">成果</a></li>
+                <li>
+                    <a href="#%e6%95%b0%e6%8d%ae%e8%a1%a8" aria-label="数据表">数据表</a><ul>
+                        
+                <li>
+                    <a href="#postgis" aria-label="PostGIS">PostGIS</a></li>
+                <li>
+                    <a href="#%e8%a1%8c%e6%94%bf%e5%8c%ba%e5%88%92" aria-label="行政区划">行政区划</a></li></ul>
+                </li>
+                <li>
+                    <a href="#%e6%97%a5%e5%bf%97" aria-label="日志">日志</a></li>
+                <li>
+                    <a href="#%e5%8f%82%e8%80%83" aria-label="参考">参考</a>
+                </li>
+            </ul>
+        </div>
+    </details>
+</div>
+
+  <div class="post-content"><h2 id="前言">前言<a hidden class="anchor" aria-hidden="true" href="#前言">#</a></h2>
+<p>微天气程序中存在如下几个功能需要使用到行政区划数据：</p>
+<ul>
+<li>城市列表，需要支持城市搜索</li>
+<li>根据经纬度获区域（城市）的天气数据</li>
+<li>地图坐标拾取并获取所处区域（城市）信息，同时获取天气数据</li>
+</ul>
+<p>对于城市的天气数据，不使用和风天气的城市列表，而是自行维护，通过空间位置（经纬度）进行关联。对于城市位置的定义，本可以选择如行政中心或市中心，但我没有这样的数据，就直接用城市区划范围的中心点代替。不准确不重要，过程已经满足了，且后续是可以替换的。</p>
+<blockquote>
+<p>其实完全可以使用官方提供的城市数据和<a href="https://dev.qweather.com/docs/api/geoapi/">GeoAPI</a>覆盖这些功能，但既然我是做GIS开发的，而且手里也有可以用作研究学习的数据，为啥不用呢。</p>
+<p>今天突然发现，其实我可以爬一下和风的数据，这样就可以拿到城市选择的经纬度数据了 @time 2023.10.10</p>
+</blockquote>
+<h2 id="about">About<a hidden class="anchor" aria-hidden="true" href="#about">#</a></h2>
+<p>行政区划解析程序，输入shape文件，写入Postgresql.</p>
+<p>大体完整的四级行政区划数据组织</p>
+<p><a href="https://github.com/zhou-fuyi/fuyi-district-parse">github link: fuyi-district-parse</a></p>
+<h2 id="数据情况">数据情况<a hidden class="anchor" aria-hidden="true" href="#数据情况">#</a></h2>
+<p>数据原源于网络，由于时间久远，我已经忘记了是如何获取到的</p>
+<p><img loading="lazy" src="https://zhou-fuyi.github.io/picx-images-hosting/202208142058324.8kzu6t1lpw.webp" alt="202208142058324"  />
+</p>
+<p><img loading="lazy" src="https://zhou-fuyi.github.io/picx-images-hosting/202208142106822.4g48up4fna.webp" alt="202208142106822"  />
+</p>
+<h2 id="名词解释">名词解释<a hidden class="anchor" aria-hidden="true" href="#名词解释">#</a></h2>
+<h3 id="省级行政区">省级行政区<a hidden class="anchor" aria-hidden="true" href="#省级行政区">#</a></h3>
+<p>中国的一级行政区，或称国家一级行政区或省级行政区，是指直属中央政府管辖的行政区划，在历史上曾有不同的称呼。如：省、自治区、直辖市、特别行政区。</p>
+<h3 id="地级行政区">地级行政区<a hidden class="anchor" aria-hidden="true" href="#地级行政区">#</a></h3>
+<p>地级行政区即“地区级别行政区”，是现行中华人民共和国行政区划中常规的第二级行政区划单位，包括地级市、地区、盟、自治州等。地级行政区隶属于省、自治区、直辖市等省级行政区之下；下辖若干个县、区、县级市、旗等县级行政区。作为特例，东莞市、中山市、嘉峪关市、儋州市等四个地级市下辖街道办事处与乡镇，不辖县、区，因此也称作“直筒子（地级）市”。地级行政区的级别为正厅级，所以非正厅级的省直辖的行政区划不算作地级行政区，例如：湖北省辖的仙桃市、天门市、潜江市；河南省辖的济源市等等。直辖市下辖的区，虽然是正厅级，但未列入地级行政区的统计。</p>
+<h3 id="县级行政区">县级行政区<a hidden class="anchor" aria-hidden="true" href="#县级行政区">#</a></h3>
+<p>县为中华人民共和国行政区划单位之一，县级行政区指行政地位与“县”相同的行政区划单位的总称，其管辖乡级行政区。为乡、镇的上一级行政区划单位。中华人民共和国成立后，随着行政督察区名称的变更，除各直辖市均隶属于专区（行政督察专区）、地区或地级行政区，现除各直辖市、海南省直管县外均为地级行政区的下一级行政区。</p>
+<ul>
+<li>按省、县、乡三级行政区划制度划分，县级行政区属于第二级行政区，为直辖市的下级行政区划单位。</li>
+<li>按省、地、县、乡四级行政区划制度划分，县级行政区属于第三级行政区，属于省、自治区所辖地级行政区的下级行政区划单位。</li>
+</ul>
+<h3 id="乡级行政区">乡级行政区<a hidden class="anchor" aria-hidden="true" href="#乡级行政区">#</a></h3>
+<p>乡，中华人民共和国现行基层行政区划单位，区划层次介于县与村之间。“乡”为县、县级市下的主要行政区划类型之一。中国行政区划史上，“乡”一直为县的行政区划单元，因此现行处同一层次的区划单位归入乡级行政区。中国自改革开放以来，由于城市的快速扩张，行政区划制度出现了大的变革。1980年代以后“乡改镇”、“乡改街道”的现象越来越普遍。</p>
+<p>在乡级行政区划中，乡（包括镇）设有一级人民政府，属于基层政权；乡的行政区划单位为村（含民族村）。但很多乡设有社区，乡的区划单位设置与镇、街道看不出实质性差异。</p>
+<h2 id="目的">目的<a hidden class="anchor" aria-hidden="true" href="#目的">#</a></h2>
+<p>解析所有数据文件，实现最终入库</p>
+<p>使用GeoTools实现</p>
+<p>数据库表结构：</p>
+<ul>
+<li>
+<p>行政区划信息（district_info）</p>
+<ul>
+<li>id：自增Id（bigserial）</li>
+<li>name：行政区划名称</li>
+<li>grade：行政区划等级（省级行政区：1， 地级行政区：2， 县级行政区：3，）</li>
+<li>code：行政区代码</li>
+<li>center_point：中心点（geometry::point）</li>
+<li>bounds：行政区边界（geometry）</li>
+</ul>
+</li>
+</ul>
+<p>注：</p>
+<ul>
+<li>数据入库前审查，保证行政区代码唯一</li>
+<li>使用grade区分省、市、县、乡镇</li>
+<li>对于省、市、县code列，统一进行前6位截取（不满6位字符所在数据，直接丢弃），对于乡镇则统一进行前9位进行截取（不满9位字符所在数据，直接丢弃）</li>
+</ul>
+<h2 id="省级行政区-1">省级行政区<a hidden class="anchor" aria-hidden="true" href="#省级行政区-1">#</a></h2>
+<p>存在错乱数据，可以使用行政区代码识别（adcode）</p>
+<p><img loading="lazy" src="https://zhou-fuyi.github.io/picx-images-hosting/20220814173117.9gwbm9ba5f.webp" alt="省级行政区-shapefile"  />
+</p>
+<h2 id="地级行政区-1">地级行政区<a hidden class="anchor" aria-hidden="true" href="#地级行政区-1">#</a></h2>
+<p>存在错乱数据，可以使用行政区代码识别（code），需要截取前6位</p>
+<p><img loading="lazy" src="https://zhou-fuyi.github.io/picx-images-hosting/20220814173132.6wqh9mbbj9.webp" alt="地级行政区"  />
+</p>
+<h2 id="县级行政区-1">县级行政区<a hidden class="anchor" aria-hidden="true" href="#县级行政区-1">#</a></h2>
+<p>存在错乱数据，可以使用行政区代码识别（code），需要截取前6位</p>
+<p><img loading="lazy" src="https://zhou-fuyi.github.io/picx-images-hosting/20220814173141.32hpqntdlz.webp" alt="县级行政区-shapefile"  />
+</p>
+<h2 id="乡级行政区-1">乡级行政区<a hidden class="anchor" aria-hidden="true" href="#乡级行政区-1">#</a></h2>
+<p><img loading="lazy" src="https://zhou-fuyi.github.io/picx-images-hosting/20220814173148.1lbkowp8ve.webp" alt="乡级行政区-shapefile"  />
+</p>
+<h2 id="成果">成果<a hidden class="anchor" aria-hidden="true" href="#成果">#</a></h2>
+<p>记录数：46652</p>
+<p>点数据为各个行政区中心点</p>
+<p><img loading="lazy" src="https://zhou-fuyi.github.io/picx-images-hosting/202208141739133.6m3nggw3eb.webp" alt="数据解析成果-shapefile_to_postgis"  />
+</p>
+<h2 id="数据表">数据表<a hidden class="anchor" aria-hidden="true" href="#数据表">#</a></h2>
+<h3 id="postgis">PostGIS<a hidden class="anchor" aria-hidden="true" href="#postgis">#</a></h3>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-sql" data-lang="sql"><span class="line"><span class="cl"><span class="k">CREATE</span><span class="w"> </span><span class="n">EXTENSION</span><span class="w"> </span><span class="k">IF</span><span class="w"> </span><span class="k">NOT</span><span class="w"> </span><span class="k">EXISTS</span><span class="w"> </span><span class="n">postgis</span><span class="w"> </span><span class="k">WITH</span><span class="w"> </span><span class="k">SCHEMA</span><span class="w"> </span><span class="k">public</span><span class="p">;</span><span class="w">
+</span></span></span></code></pre></div><h3 id="行政区划">行政区划<a hidden class="anchor" aria-hidden="true" href="#行政区划">#</a></h3>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-sql" data-lang="sql"><span class="line"><span class="cl"><span class="c1">--
+</span></span></span><span class="line"><span class="cl"><span class="c1">-- Name: district_info_id_seq; Type: SEQUENCE; Schema: public; Owner: postgres
+</span></span></span><span class="line"><span class="cl"><span class="c1">--
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="k">CREATE</span><span class="w"> </span><span class="n">SEQUENCE</span><span class="w"> </span><span class="k">public</span><span class="p">.</span><span class="n">district_info_id_seq</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="k">START</span><span class="w"> </span><span class="k">WITH</span><span class="w"> </span><span class="mi">1</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="k">INCREMENT</span><span class="w"> </span><span class="k">BY</span><span class="w"> </span><span class="mi">1</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="k">NO</span><span class="w"> </span><span class="k">MINVALUE</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="k">NO</span><span class="w"> </span><span class="k">MAXVALUE</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="k">CACHE</span><span class="w"> </span><span class="mi">1</span><span class="p">;</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="k">ALTER</span><span class="w"> </span><span class="k">TABLE</span><span class="w"> </span><span class="k">public</span><span class="p">.</span><span class="n">district_info_id_seq</span><span class="w"> </span><span class="k">OWNER</span><span class="w"> </span><span class="k">TO</span><span class="w"> </span><span class="n">postgres</span><span class="p">;</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="c1">-- Table: public.district_info
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="c1">-- DROP TABLE IF EXISTS public.district_info;
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="k">CREATE</span><span class="w"> </span><span class="k">TABLE</span><span class="w"> </span><span class="k">IF</span><span class="w"> </span><span class="k">NOT</span><span class="w"> </span><span class="k">EXISTS</span><span class="w"> </span><span class="k">public</span><span class="p">.</span><span class="n">district_info</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="p">(</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="n">name</span><span class="w"> </span><span class="nb">character</span><span class="w"> </span><span class="nb">varying</span><span class="w"> </span><span class="k">COLLATE</span><span class="w"> </span><span class="n">pg_catalog</span><span class="p">.</span><span class="s2">&#34;default&#34;</span><span class="p">,</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="n">grade</span><span class="w"> </span><span class="nb">integer</span><span class="p">,</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="n">code</span><span class="w"> </span><span class="nb">character</span><span class="w"> </span><span class="nb">varying</span><span class="w"> </span><span class="k">COLLATE</span><span class="w"> </span><span class="n">pg_catalog</span><span class="p">.</span><span class="s2">&#34;default&#34;</span><span class="p">,</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="n">center_point</span><span class="w"> </span><span class="n">geometry</span><span class="p">(</span><span class="n">Point</span><span class="p">,</span><span class="mi">4326</span><span class="p">),</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="n">bounds</span><span class="w"> </span><span class="n">geometry</span><span class="p">(</span><span class="n">MultiPolygon</span><span class="p">,</span><span class="mi">4326</span><span class="p">),</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="n">create_time</span><span class="w"> </span><span class="k">timestamp</span><span class="w"> </span><span class="k">without</span><span class="w"> </span><span class="n">time</span><span class="w"> </span><span class="k">zone</span><span class="w"> </span><span class="k">DEFAULT</span><span class="w"> </span><span class="k">CURRENT_TIMESTAMP</span><span class="p">,</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="n">uid</span><span class="w"> </span><span class="nb">character</span><span class="w"> </span><span class="nb">varying</span><span class="w"> </span><span class="k">COLLATE</span><span class="w"> </span><span class="n">pg_catalog</span><span class="p">.</span><span class="s2">&#34;default&#34;</span><span class="p">,</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="n">id</span><span class="w"> </span><span class="nb">bigint</span><span class="w"> </span><span class="k">NOT</span><span class="w"> </span><span class="k">NULL</span><span class="w"> </span><span class="k">DEFAULT</span><span class="w"> </span><span class="n">nextval</span><span class="p">(</span><span class="s1">&#39;district_info_id_seq&#39;</span><span class="p">::</span><span class="n">regclass</span><span class="p">),</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="k">CONSTRAINT</span><span class="w"> </span><span class="n">district_info_pkey</span><span class="w"> </span><span class="k">PRIMARY</span><span class="w"> </span><span class="k">KEY</span><span class="w"> </span><span class="p">(</span><span class="n">id</span><span class="p">)</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="p">)</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="n">TABLESPACE</span><span class="w"> </span><span class="n">pg_default</span><span class="p">;</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="k">ALTER</span><span class="w"> </span><span class="k">TABLE</span><span class="w"> </span><span class="k">IF</span><span class="w"> </span><span class="k">EXISTS</span><span class="w"> </span><span class="k">public</span><span class="p">.</span><span class="n">district_info</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="k">OWNER</span><span class="w"> </span><span class="k">to</span><span class="w"> </span><span class="n">postgres</span><span class="p">;</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="k">COMMENT</span><span class="w"> </span><span class="k">ON</span><span class="w"> </span><span class="k">TABLE</span><span class="w"> </span><span class="k">public</span><span class="p">.</span><span class="n">district_info</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="k">IS</span><span class="w"> </span><span class="s1">&#39;行政区划信息表&#39;</span><span class="p">;</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="k">COMMENT</span><span class="w"> </span><span class="k">ON</span><span class="w"> </span><span class="k">COLUMN</span><span class="w"> </span><span class="k">public</span><span class="p">.</span><span class="n">district_info</span><span class="p">.</span><span class="n">name</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="k">IS</span><span class="w"> </span><span class="s1">&#39;行政区名称&#39;</span><span class="p">;</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="k">COMMENT</span><span class="w"> </span><span class="k">ON</span><span class="w"> </span><span class="k">COLUMN</span><span class="w"> </span><span class="k">public</span><span class="p">.</span><span class="n">district_info</span><span class="p">.</span><span class="n">grade</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="k">IS</span><span class="w"> </span><span class="s1">&#39;行政区等级，目前支持：（1：省级行政区，2；市级行政区，3：县级行政区，4：乡级行政区）&#39;</span><span class="p">;</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="k">COMMENT</span><span class="w"> </span><span class="k">ON</span><span class="w"> </span><span class="k">COLUMN</span><span class="w"> </span><span class="k">public</span><span class="p">.</span><span class="n">district_info</span><span class="p">.</span><span class="n">code</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="k">IS</span><span class="w"> </span><span class="s1">&#39;行政区编码。其中，县级与县级以上行政区编码为6位，县级以下（即乡级）行政区编码为9位&#39;</span><span class="p">;</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="k">COMMENT</span><span class="w"> </span><span class="k">ON</span><span class="w"> </span><span class="k">COLUMN</span><span class="w"> </span><span class="k">public</span><span class="p">.</span><span class="n">district_info</span><span class="p">.</span><span class="n">center_point</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="k">IS</span><span class="w"> </span><span class="s1">&#39;行政区中心点，数据坐标系：4326&#39;</span><span class="p">;</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="k">COMMENT</span><span class="w"> </span><span class="k">ON</span><span class="w"> </span><span class="k">COLUMN</span><span class="w"> </span><span class="k">public</span><span class="p">.</span><span class="n">district_info</span><span class="p">.</span><span class="n">bounds</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="k">IS</span><span class="w"> </span><span class="s1">&#39;行政区边界，数据坐标系：4326&#39;</span><span class="p">;</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="k">COMMENT</span><span class="w"> </span><span class="k">ON</span><span class="w"> </span><span class="k">COLUMN</span><span class="w"> </span><span class="k">public</span><span class="p">.</span><span class="n">district_info</span><span class="p">.</span><span class="n">uid</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="k">IS</span><span class="w"> </span><span class="s1">&#39;唯一标识，便于数据迁移&#39;</span><span class="p">;</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="c1">--
+</span></span></span><span class="line"><span class="cl"><span class="c1">-- Name: district_info_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: postgres
+</span></span></span><span class="line"><span class="cl"><span class="c1">--
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="k">ALTER</span><span class="w"> </span><span class="n">SEQUENCE</span><span class="w"> </span><span class="k">public</span><span class="p">.</span><span class="n">district_info_id_seq</span><span class="w"> </span><span class="n">OWNED</span><span class="w"> </span><span class="k">BY</span><span class="w"> </span><span class="k">public</span><span class="p">.</span><span class="n">district_info</span><span class="p">.</span><span class="n">id</span><span class="p">;</span><span class="w">
+</span></span></span></code></pre></div><h2 id="日志">日志<a hidden class="anchor" aria-hidden="true" href="#日志">#</a></h2>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-t" data-lang="t"><span class="line"><span class="cl"><span class="o">...</span>
+</span></span><span class="line"><span class="cl"><span class="n">org</span><span class="o">.</span><span class="n">fuyi</span><span class="o">.</span><span class="n">district</span><span class="o">.</span><span class="n">DistrictParseApplication</span>
+</span></span><span class="line"><span class="cl"><span class="sr">/home/</span><span class="n">fuyi</span><span class="sr">/GeoDatabase/</span><span class="n">China</span>
+</span></span><span class="line"><span class="cl"><span class="o">-------------------</span>
+</span></span><span class="line"><span class="cl"><span class="sr">/home/</span><span class="n">fuyi</span><span class="sr">/GeoDatabase/</span><span class="n">China</span><span class="sr">/重庆市/</span><span class="n">重庆市_市界</span><span class="o">.</span><span class="n">shp</span>
+</span></span><span class="line"><span class="cl"><span class="n">current</span> <span class="n">element</span> <span class="n">size:</span> <span class="mi">12</span>
+</span></span><span class="line"><span class="cl"><span class="o">-------------------</span>
+</span></span><span class="line"><span class="cl"><span class="sr">/home/</span><span class="n">fuyi</span><span class="sr">/GeoDatabase/</span><span class="n">China</span><span class="sr">/重庆市/</span><span class="n">重庆市_省界</span><span class="o">.</span><span class="n">shp</span>
+</span></span><span class="line"><span class="cl"><span class="n">current</span> <span class="n">element</span> <span class="n">size:</span> <span class="mi">4</span>
+</span></span><span class="line"><span class="cl"><span class="o">-------------------</span>
+</span></span><span class="line"><span class="cl"><span class="sr">/home/</span><span class="n">fuyi</span><span class="sr">/GeoDatabase/</span><span class="n">China</span><span class="sr">/重庆市/</span><span class="n">重庆市_县界</span><span class="o">.</span><span class="n">shp</span>
+</span></span><span class="line"><span class="cl"><span class="n">current</span> <span class="n">element</span> <span class="n">size:</span> <span class="mi">75</span>
+</span></span><span class="line"><span class="cl"><span class="o">-------------------</span>
+</span></span><span class="line"><span class="cl"><span class="sr">/home/</span><span class="n">fuyi</span><span class="sr">/GeoDatabase/</span><span class="n">China</span><span class="sr">/重庆市/</span><span class="n">重庆市_乡镇边界</span><span class="o">.</span><span class="n">shp</span>
+</span></span><span class="line"><span class="cl"><span class="n">current</span> <span class="n">element</span> <span class="n">size:</span> <span class="mi">1218</span>
+</span></span><span class="line"><span class="cl"><span class="o">-------------------</span>
+</span></span><span class="line"><span class="cl"><span class="sr">/home/</span><span class="n">fuyi</span><span class="sr">/GeoDatabase/</span><span class="n">China</span><span class="sr">/新疆自治区/</span><span class="n">新疆自治区_省界</span><span class="o">.</span><span class="n">shp</span>
+</span></span><span class="line"><span class="cl"><span class="n">current</span> <span class="n">element</span> <span class="n">size:</span> <span class="mi">4</span>
+</span></span><span class="line"><span class="cl"><span class="o">-------------------</span>
+</span></span><span class="line"><span class="cl"><span class="sr">/home/</span><span class="n">fuyi</span><span class="sr">/GeoDatabase/</span><span class="n">China</span><span class="sr">/新疆自治区/</span><span class="n">新疆自治区_县界</span><span class="o">.</span><span class="n">shp</span>
+</span></span><span class="line"><span class="cl"><span class="n">current</span> <span class="n">element</span> <span class="n">size:</span> <span class="mi">111</span>
+</span></span><span class="line"><span class="cl"><span class="o">-------------------</span>
+</span></span><span class="line"><span class="cl"><span class="sr">/home/</span><span class="n">fuyi</span><span class="sr">/GeoDatabase/</span><span class="n">China</span><span class="sr">/新疆自治区/</span><span class="n">新疆自治区_乡镇边界</span><span class="o">.</span><span class="n">shp</span>
+</span></span><span class="line"><span class="cl"><span class="n">current</span> <span class="n">element</span> <span class="n">size:</span> <span class="mi">1410</span>
+</span></span><span class="line"><span class="cl"><span class="o">-------------------</span>
+</span></span><span class="line"><span class="cl"><span class="sr">/home/</span><span class="n">fuyi</span><span class="sr">/GeoDatabase/</span><span class="n">China</span><span class="sr">/新疆自治区/</span><span class="n">新疆自治区_市界</span><span class="o">.</span><span class="n">shp</span>
+</span></span><span class="line"><span class="cl"><span class="n">current</span> <span class="n">element</span> <span class="n">size:</span> <span class="mi">28</span>
+</span></span><span class="line"><span class="cl"><span class="o">-------------------</span>
+</span></span><span class="line"><span class="cl"><span class="sr">/home/</span><span class="n">fuyi</span><span class="sr">/GeoDatabase/</span><span class="n">China</span><span class="sr">/湖北省/</span><span class="n">湖北省_市界</span><span class="o">.</span><span class="n">shp</span>
+</span></span><span class="line"><span class="cl"><span class="n">current</span> <span class="n">element</span> <span class="n">size:</span> <span class="mi">28</span>
+</span></span><span class="line"><span class="cl"><span class="o">-------------------</span>
+</span></span><span class="line"><span class="cl"><span class="sr">/home/</span><span class="n">fuyi</span><span class="sr">/GeoDatabase/</span><span class="n">China</span><span class="sr">/湖北省/</span><span class="n">湖北省_省界</span><span class="o">.</span><span class="n">shp</span>
+</span></span><span class="line"><span class="cl"><span class="n">current</span> <span class="n">element</span> <span class="n">size:</span> <span class="mi">6</span>
+</span></span><span class="line"><span class="cl"><span class="o">-------------------</span>
+</span></span><span class="line"><span class="cl"><span class="sr">/home/</span><span class="n">fuyi</span><span class="sr">/GeoDatabase/</span><span class="n">China</span><span class="sr">/湖北省/</span><span class="n">湖北省_县界</span><span class="o">.</span><span class="n">shp</span>
+</span></span><span class="line"><span class="cl"><span class="n">current</span> <span class="n">element</span> <span class="n">size:</span> <span class="mi">150</span>
+</span></span><span class="line"><span class="cl"><span class="o">-------------------</span>
+</span></span><span class="line"><span class="cl"><span class="sr">/home/</span><span class="n">fuyi</span><span class="sr">/GeoDatabase/</span><span class="n">China</span><span class="sr">/湖北省/</span><span class="n">湖北省_乡镇边界</span><span class="o">.</span><span class="n">shp</span>
+</span></span><span class="line"><span class="cl"><span class="n">current</span> <span class="n">element</span> <span class="n">size:</span> <span class="mi">1679</span>
+</span></span><span class="line"><span class="cl"><span class="o">-------------------</span>
+</span></span><span class="line"><span class="cl"><span class="sr">/home/</span><span class="n">fuyi</span><span class="sr">/GeoDatabase/</span><span class="n">China</span><span class="sr">/陕西省/</span><span class="n">陕西省_市界</span><span class="o">.</span><span class="n">shp</span>
+</span></span><span class="line"><span class="cl"><span class="n">current</span> <span class="n">element</span> <span class="n">size:</span> <span class="mi">24</span>
+</span></span><span class="line"><span class="cl"><span class="o">-------------------</span>
+</span></span><span class="line"><span class="cl"><span class="sr">/home/</span><span class="n">fuyi</span><span class="sr">/GeoDatabase/</span><span class="n">China</span><span class="sr">/陕西省/</span><span class="n">陕西省_县界</span><span class="o">.</span><span class="n">shp</span>
+</span></span><span class="line"><span class="cl"><span class="n">current</span> <span class="n">element</span> <span class="n">size:</span> <span class="mi">158</span>
+</span></span><span class="line"><span class="cl"><span class="o">-------------------</span>
+</span></span><span class="line"><span class="cl"><span class="sr">/home/</span><span class="n">fuyi</span><span class="sr">/GeoDatabase/</span><span class="n">China</span><span class="sr">/陕西省/</span><span class="n">陕西省_省界</span><span class="o">.</span><span class="n">shp</span>
+</span></span><span class="line"><span class="cl"><span class="n">current</span> <span class="n">element</span> <span class="n">size:</span> <span class="mi">7</span>
+</span></span><span class="line"><span class="cl"><span class="o">-------------------</span>
+</span></span><span class="line"><span class="cl"><span class="sr">/home/</span><span class="n">fuyi</span><span class="sr">/GeoDatabase/</span><span class="n">China</span><span class="sr">/陕西省/</span><span class="n">陕西省_乡镇边界</span><span class="o">.</span><span class="n">shp</span>
+</span></span><span class="line"><span class="cl"><span class="n">current</span> <span class="n">element</span> <span class="n">size:</span> <span class="mi">1559</span>
+</span></span><span class="line"><span class="cl"><span class="o">-------------------</span>
+</span></span><span class="line"><span class="cl"><span class="sr">/home/</span><span class="n">fuyi</span><span class="sr">/GeoDatabase/</span><span class="n">China</span><span class="sr">/广东省/</span><span class="n">广东省_省界</span><span class="o">.</span><span class="n">shp</span>
+</span></span><span class="line"><span class="cl"><span class="n">current</span> <span class="n">element</span> <span class="n">size:</span> <span class="mi">7</span>
+</span></span><span class="line"><span class="cl"><span class="o">-------------------</span>
+</span></span><span class="line"><span class="cl"><span class="sr">/home/</span><span class="n">fuyi</span><span class="sr">/GeoDatabase/</span><span class="n">China</span><span class="sr">/广东省/</span><span class="n">广东省_县界</span><span class="o">.</span><span class="n">shp</span>
+</span></span><span class="line"><span class="cl"><span class="n">current</span> <span class="n">element</span> <span class="n">size:</span> <span class="mi">160</span>
+</span></span><span class="line"><span class="cl"><span class="o">-------------------</span>
+</span></span><span class="line"><span class="cl"><span class="sr">/home/</span><span class="n">fuyi</span><span class="sr">/GeoDatabase/</span><span class="n">China</span><span class="sr">/广东省/</span><span class="n">广东省_市界</span><span class="o">.</span><span class="n">shp</span>
+</span></span><span class="line"><span class="cl"><span class="n">current</span> <span class="n">element</span> <span class="n">size:</span> <span class="mi">31</span>
+</span></span><span class="line"><span class="cl"><span class="o">-------------------</span>
+</span></span><span class="line"><span class="cl"><span class="sr">/home/</span><span class="n">fuyi</span><span class="sr">/GeoDatabase/</span><span class="n">China</span><span class="sr">/广东省/</span><span class="n">广东省_乡镇边界</span><span class="o">.</span><span class="n">shp</span>
+</span></span><span class="line"><span class="cl"><span class="n">current</span> <span class="n">element</span> <span class="n">size:</span> <span class="mi">1902</span>
+</span></span><span class="line"><span class="cl"><span class="o">-------------------</span>
+</span></span><span class="line"><span class="cl"><span class="sr">/home/</span><span class="n">fuyi</span><span class="sr">/GeoDatabase/</span><span class="n">China</span><span class="sr">/云南省/</span><span class="n">云南省_乡镇边界</span><span class="o">.</span><span class="n">shp</span>
+</span></span><span class="line"><span class="cl"><span class="n">current</span> <span class="n">element</span> <span class="n">size:</span> <span class="mi">1594</span>
+</span></span><span class="line"><span class="cl"><span class="o">-------------------</span>
+</span></span><span class="line"><span class="cl"><span class="sr">/home/</span><span class="n">fuyi</span><span class="sr">/GeoDatabase/</span><span class="n">China</span><span class="sr">/云南省/</span><span class="n">云南省_省界</span><span class="o">.</span><span class="n">shp</span>
+</span></span><span class="line"><span class="cl"><span class="n">current</span> <span class="n">element</span> <span class="n">size:</span> <span class="mi">5</span>
+</span></span><span class="line"><span class="cl"><span class="o">-------------------</span>
+</span></span><span class="line"><span class="cl"><span class="sr">/home/</span><span class="n">fuyi</span><span class="sr">/GeoDatabase/</span><span class="n">China</span><span class="sr">/云南省/</span><span class="n">云南省_县界</span><span class="o">.</span><span class="n">shp</span>
+</span></span><span class="line"><span class="cl"><span class="n">current</span> <span class="n">element</span> <span class="n">size:</span> <span class="mi">165</span>
+</span></span><span class="line"><span class="cl"><span class="o">-------------------</span>
+</span></span><span class="line"><span class="cl"><span class="sr">/home/</span><span class="n">fuyi</span><span class="sr">/GeoDatabase/</span><span class="n">China</span><span class="sr">/云南省/</span><span class="n">云南省_市界</span><span class="o">.</span><span class="n">shp</span>
+</span></span><span class="line"><span class="cl"><span class="n">current</span> <span class="n">element</span> <span class="n">size:</span> <span class="mi">27</span>
+</span></span><span class="line"><span class="cl"><span class="o">-------------------</span>
+</span></span><span class="line"><span class="cl"><span class="sr">/home/</span><span class="n">fuyi</span><span class="sr">/GeoDatabase/</span><span class="n">China</span><span class="sr">/宁夏省/</span><span class="n">宁夏省_市界</span><span class="o">.</span><span class="n">shp</span>
+</span></span><span class="line"><span class="cl"><span class="n">current</span> <span class="n">element</span> <span class="n">size:</span> <span class="mi">12</span>
+</span></span><span class="line"><span class="cl"><span class="o">-------------------</span>
+</span></span><span class="line"><span class="cl"><span class="sr">/home/</span><span class="n">fuyi</span><span class="sr">/GeoDatabase/</span><span class="n">China</span><span class="sr">/宁夏省/</span><span class="n">宁夏省_乡镇边界</span><span class="o">.</span><span class="n">shp</span>
+</span></span><span class="line"><span class="cl"><span class="n">current</span> <span class="n">element</span> <span class="n">size:</span> <span class="mi">326</span>
+</span></span><span class="line"><span class="cl"><span class="o">-------------------</span>
+</span></span><span class="line"><span class="cl"><span class="sr">/home/</span><span class="n">fuyi</span><span class="sr">/GeoDatabase/</span><span class="n">China</span><span class="sr">/宁夏省/</span><span class="n">宁夏省_县界</span><span class="o">.</span><span class="n">shp</span>
+</span></span><span class="line"><span class="cl"><span class="n">current</span> <span class="n">element</span> <span class="n">size:</span> <span class="mi">36</span>
+</span></span><span class="line"><span class="cl"><span class="o">-------------------</span>
+</span></span><span class="line"><span class="cl"><span class="sr">/home/</span><span class="n">fuyi</span><span class="sr">/GeoDatabase/</span><span class="n">China</span><span class="sr">/宁夏省/</span><span class="n">宁夏省_省界</span><span class="o">.</span><span class="n">shp</span>
+</span></span><span class="line"><span class="cl"><span class="n">current</span> <span class="n">element</span> <span class="n">size:</span> <span class="mi">4</span>
+</span></span><span class="line"><span class="cl"><span class="o">-------------------</span>
+</span></span><span class="line"><span class="cl"><span class="sr">/home/</span><span class="n">fuyi</span><span class="sr">/GeoDatabase/</span><span class="n">China</span><span class="sr">/内蒙古自治区/</span><span class="n">内蒙古自治区_乡镇边界</span><span class="o">.</span><span class="n">shp</span>
+</span></span><span class="line"><span class="cl"><span class="n">current</span> <span class="n">element</span> <span class="n">size:</span> <span class="mi">1498</span>
+</span></span><span class="line"><span class="cl"><span class="o">-------------------</span>
+</span></span><span class="line"><span class="cl"><span class="sr">/home/</span><span class="n">fuyi</span><span class="sr">/GeoDatabase/</span><span class="n">China</span><span class="sr">/内蒙古自治区/</span><span class="n">内蒙古自治区_市界</span><span class="o">.</span><span class="n">shp</span>
+</span></span><span class="line"><span class="cl"><span class="n">current</span> <span class="n">element</span> <span class="n">size:</span> <span class="mi">35</span>
+</span></span><span class="line"><span class="cl"><span class="o">-------------------</span>
+</span></span><span class="line"><span class="cl"><span class="sr">/home/</span><span class="n">fuyi</span><span class="sr">/GeoDatabase/</span><span class="n">China</span><span class="sr">/内蒙古自治区/</span><span class="n">内蒙古自治区_省界</span><span class="o">.</span><span class="n">shp</span>
+</span></span><span class="line"><span class="cl"><span class="n">current</span> <span class="n">element</span> <span class="n">size:</span> <span class="mi">7</span>
+</span></span><span class="line"><span class="cl"><span class="o">-------------------</span>
+</span></span><span class="line"><span class="cl"><span class="sr">/home/</span><span class="n">fuyi</span><span class="sr">/GeoDatabase/</span><span class="n">China</span><span class="sr">/内蒙古自治区/</span><span class="n">内蒙古自治区_县界</span><span class="o">.</span><span class="n">shp</span>
+</span></span><span class="line"><span class="cl"><span class="n">current</span> <span class="n">element</span> <span class="n">size:</span> <span class="mi">173</span>
+</span></span><span class="line"><span class="cl"><span class="o">-------------------</span>
+</span></span><span class="line"><span class="cl"><span class="sr">/home/</span><span class="n">fuyi</span><span class="sr">/GeoDatabase/</span><span class="n">China</span><span class="sr">/海南省/</span><span class="n">海南省_县界</span><span class="o">.</span><span class="n">shp</span>
+</span></span><span class="line"><span class="cl"><span class="n">current</span> <span class="n">element</span> <span class="n">size:</span> <span class="mi">27</span>
+</span></span><span class="line"><span class="cl"><span class="o">-------------------</span>
+</span></span><span class="line"><span class="cl"><span class="sr">/home/</span><span class="n">fuyi</span><span class="sr">/GeoDatabase/</span><span class="n">China</span><span class="sr">/海南省/</span><span class="n">海南省_省界</span><span class="o">.</span><span class="n">shp</span>
+</span></span><span class="line"><span class="cl"><span class="n">current</span> <span class="n">element</span> <span class="n">size:</span> <span class="mi">1</span>
+</span></span><span class="line"><span class="cl"><span class="o">-------------------</span>
+</span></span><span class="line"><span class="cl"><span class="sr">/home/</span><span class="n">fuyi</span><span class="sr">/GeoDatabase/</span><span class="n">China</span><span class="sr">/海南省/</span><span class="n">海南省_市界</span><span class="o">.</span><span class="n">shp</span>
+</span></span><span class="line"><span class="cl"><span class="n">current</span> <span class="n">element</span> <span class="n">size:</span> <span class="mi">19</span>
+</span></span><span class="line"><span class="cl"><span class="o">-------------------</span>
+</span></span><span class="line"><span class="cl"><span class="sr">/home/</span><span class="n">fuyi</span><span class="sr">/GeoDatabase/</span><span class="n">China</span><span class="sr">/海南省/</span><span class="n">海南省_乡镇边界</span><span class="o">.</span><span class="n">shp</span>
+</span></span><span class="line"><span class="cl"><span class="n">current</span> <span class="n">element</span> <span class="n">size:</span> <span class="mi">214</span>
+</span></span><span class="line"><span class="cl"><span class="o">-------------------</span>
+</span></span><span class="line"><span class="cl"><span class="sr">/home/</span><span class="n">fuyi</span><span class="sr">/GeoDatabase/</span><span class="n">China</span><span class="sr">/山东省/</span><span class="n">山东省_省界</span><span class="o">.</span><span class="n">shp</span>
+</span></span><span class="line"><span class="cl"><span class="n">current</span> <span class="n">element</span> <span class="n">size:</span> <span class="mi">5</span>
+</span></span><span class="line"><span class="cl"><span class="o">-------------------</span>
+</span></span><span class="line"><span class="cl"><span class="sr">/home/</span><span class="n">fuyi</span><span class="sr">/GeoDatabase/</span><span class="n">China</span><span class="sr">/山东省/</span><span class="n">山东省_乡镇边界</span><span class="o">.</span><span class="n">shp</span>
+</span></span><span class="line"><span class="cl"><span class="n">current</span> <span class="n">element</span> <span class="n">size:</span> <span class="mi">1984</span>
+</span></span><span class="line"><span class="cl"><span class="o">-------------------</span>
+</span></span><span class="line"><span class="cl"><span class="sr">/home/</span><span class="n">fuyi</span><span class="sr">/GeoDatabase/</span><span class="n">China</span><span class="sr">/山东省/</span><span class="n">山东省_市界</span><span class="o">.</span><span class="n">shp</span>
+</span></span><span class="line"><span class="cl"><span class="n">current</span> <span class="n">element</span> <span class="n">size:</span> <span class="mi">27</span>
+</span></span><span class="line"><span class="cl"><span class="o">-------------------</span>
+</span></span><span class="line"><span class="cl"><span class="sr">/home/</span><span class="n">fuyi</span><span class="sr">/GeoDatabase/</span><span class="n">China</span><span class="sr">/山东省/</span><span class="n">山东省_县界</span><span class="o">.</span><span class="n">shp</span>
+</span></span><span class="line"><span class="cl"><span class="n">current</span> <span class="n">element</span> <span class="n">size:</span> <span class="mi">167</span>
+</span></span><span class="line"><span class="cl"><span class="o">-------------------</span>
+</span></span><span class="line"><span class="cl"><span class="sr">/home/</span><span class="n">fuyi</span><span class="sr">/GeoDatabase/</span><span class="n">China</span><span class="sr">/浙江省/</span><span class="n">浙江省_省界</span><span class="o">.</span><span class="n">shp</span>
+</span></span><span class="line"><span class="cl"><span class="n">current</span> <span class="n">element</span> <span class="n">size:</span> <span class="mi">6</span>
+</span></span><span class="line"><span class="cl"><span class="o">-------------------</span>
+</span></span><span class="line"><span class="cl"><span class="sr">/home/</span><span class="n">fuyi</span><span class="sr">/GeoDatabase/</span><span class="n">China</span><span class="sr">/浙江省/</span><span class="n">浙江省_市界</span><span class="o">.</span><span class="n">shp</span>
+</span></span><span class="line"><span class="cl"><span class="n">current</span> <span class="n">element</span> <span class="n">size:</span> <span class="mi">18</span>
+</span></span><span class="line"><span class="cl"><span class="o">-------------------</span>
+</span></span><span class="line"><span class="cl"><span class="sr">/home/</span><span class="n">fuyi</span><span class="sr">/GeoDatabase/</span><span class="n">China</span><span class="sr">/浙江省/</span><span class="n">浙江省_县界</span><span class="o">.</span><span class="n">shp</span>
+</span></span><span class="line"><span class="cl"><span class="n">current</span> <span class="n">element</span> <span class="n">size:</span> <span class="mi">110</span>
+</span></span><span class="line"><span class="cl"><span class="o">-------------------</span>
+</span></span><span class="line"><span class="cl"><span class="sr">/home/</span><span class="n">fuyi</span><span class="sr">/GeoDatabase/</span><span class="n">China</span><span class="sr">/浙江省/</span><span class="n">浙江省_乡镇边界</span><span class="o">.</span><span class="n">shp</span>
+</span></span><span class="line"><span class="cl"><span class="n">current</span> <span class="n">element</span> <span class="n">size:</span> <span class="mi">1431</span>
+</span></span><span class="line"><span class="cl"><span class="o">-------------------</span>
+</span></span><span class="line"><span class="cl"><span class="sr">/home/</span><span class="n">fuyi</span><span class="sr">/GeoDatabase/</span><span class="n">China</span><span class="sr">/青海省/</span><span class="n">青海省_省界</span><span class="o">.</span><span class="n">shp</span>
+</span></span><span class="line"><span class="cl"><span class="n">current</span> <span class="n">element</span> <span class="n">size:</span> <span class="mi">5</span>
+</span></span><span class="line"><span class="cl"><span class="o">-------------------</span>
+</span></span><span class="line"><span class="cl"><span class="sr">/home/</span><span class="n">fuyi</span><span class="sr">/GeoDatabase/</span><span class="n">China</span><span class="sr">/青海省/</span><span class="n">青海省_乡镇边界</span><span class="o">.</span><span class="n">shp</span>
+</span></span><span class="line"><span class="cl"><span class="n">current</span> <span class="n">element</span> <span class="n">size:</span> <span class="mi">470</span>
+</span></span><span class="line"><span class="cl"><span class="o">-------------------</span>
+</span></span><span class="line"><span class="cl"><span class="sr">/home/</span><span class="n">fuyi</span><span class="sr">/GeoDatabase/</span><span class="n">China</span><span class="sr">/青海省/</span><span class="n">青海省_县界</span><span class="o">.</span><span class="n">shp</span>
+</span></span><span class="line"><span class="cl"><span class="n">current</span> <span class="n">element</span> <span class="n">size:</span> <span class="mi">72</span>
+</span></span><span class="line"><span class="cl"><span class="o">-------------------</span>
+</span></span><span class="line"><span class="cl"><span class="sr">/home/</span><span class="n">fuyi</span><span class="sr">/GeoDatabase/</span><span class="n">China</span><span class="sr">/青海省/</span><span class="n">青海省_市界</span><span class="o">.</span><span class="n">shp</span>
+</span></span><span class="line"><span class="cl"><span class="n">current</span> <span class="n">element</span> <span class="n">size:</span> <span class="mi">19</span>
+</span></span><span class="line"><span class="cl"><span class="o">-------------------</span>
+</span></span><span class="line"><span class="cl"><span class="sr">/home/</span><span class="n">fuyi</span><span class="sr">/GeoDatabase/</span><span class="n">China</span><span class="sr">/江苏省/</span><span class="n">江苏省_乡镇边界</span><span class="o">.</span><span class="n">shp</span>
+</span></span><span class="line"><span class="cl"><span class="n">current</span> <span class="n">element</span> <span class="n">size:</span> <span class="mi">1634</span>
+</span></span><span class="line"><span class="cl"><span class="o">-------------------</span>
+</span></span><span class="line"><span class="cl"><span class="sr">/home/</span><span class="n">fuyi</span><span class="sr">/GeoDatabase/</span><span class="n">China</span><span class="sr">/江苏省/</span><span class="n">江苏省_省界</span><span class="o">.</span><span class="n">shp</span>
+</span></span><span class="line"><span class="cl"><span class="n">current</span> <span class="n">element</span> <span class="n">size:</span> <span class="mi">5</span>
+</span></span><span class="line"><span class="cl"><span class="o">-------------------</span>
+</span></span><span class="line"><span class="cl"><span class="sr">/home/</span><span class="n">fuyi</span><span class="sr">/GeoDatabase/</span><span class="n">China</span><span class="sr">/江苏省/</span><span class="n">江苏省_市界</span><span class="o">.</span><span class="n">shp</span>
+</span></span><span class="line"><span class="cl"><span class="n">current</span> <span class="n">element</span> <span class="n">size:</span> <span class="mi">26</span>
+</span></span><span class="line"><span class="cl"><span class="o">-------------------</span>
+</span></span><span class="line"><span class="cl"><span class="sr">/home/</span><span class="n">fuyi</span><span class="sr">/GeoDatabase/</span><span class="n">China</span><span class="sr">/江苏省/</span><span class="n">江苏省_县界</span><span class="o">.</span><span class="n">shp</span>
+</span></span><span class="line"><span class="cl"><span class="n">current</span> <span class="n">element</span> <span class="n">size:</span> <span class="mi">138</span>
+</span></span><span class="line"><span class="cl"><span class="o">-------------------</span>
+</span></span><span class="line"><span class="cl"><span class="sr">/home/</span><span class="n">fuyi</span><span class="sr">/GeoDatabase/</span><span class="n">China</span><span class="sr">/江西省/</span><span class="n">江西省_市界</span><span class="o">.</span><span class="n">shp</span>
+</span></span><span class="line"><span class="cl"><span class="n">current</span> <span class="n">element</span> <span class="n">size:</span> <span class="mi">27</span>
+</span></span><span class="line"><span class="cl"><span class="o">-------------------</span>
+</span></span><span class="line"><span class="cl"><span class="sr">/home/</span><span class="n">fuyi</span><span class="sr">/GeoDatabase/</span><span class="n">China</span><span class="sr">/江西省/</span><span class="n">江西省_乡镇边界</span><span class="o">.</span><span class="n">shp</span>
+</span></span><span class="line"><span class="cl"><span class="n">current</span> <span class="n">element</span> <span class="n">size:</span> <span class="mi">1927</span>
+</span></span><span class="line"><span class="cl"><span class="o">-------------------</span>
+</span></span><span class="line"><span class="cl"><span class="sr">/home/</span><span class="n">fuyi</span><span class="sr">/GeoDatabase/</span><span class="n">China</span><span class="sr">/江西省/</span><span class="n">江西省_县界</span><span class="o">.</span><span class="n">shp</span>
+</span></span><span class="line"><span class="cl"><span class="n">current</span> <span class="n">element</span> <span class="n">size:</span> <span class="mi">137</span>
+</span></span><span class="line"><span class="cl"><span class="o">-------------------</span>
+</span></span><span class="line"><span class="cl"><span class="sr">/home/</span><span class="n">fuyi</span><span class="sr">/GeoDatabase/</span><span class="n">China</span><span class="sr">/江西省/</span><span class="n">江西省_省界</span><span class="o">.</span><span class="n">shp</span>
+</span></span><span class="line"><span class="cl"><span class="n">current</span> <span class="n">element</span> <span class="n">size:</span> <span class="mi">7</span>
+</span></span><span class="line"><span class="cl"><span class="o">-------------------</span>
+</span></span><span class="line"><span class="cl"><span class="sr">/home/</span><span class="n">fuyi</span><span class="sr">/GeoDatabase/</span><span class="n">China</span><span class="sr">/西藏自治区/</span><span class="n">西藏自治区_县界</span><span class="o">.</span><span class="n">shp</span>
+</span></span><span class="line"><span class="cl"><span class="n">current</span> <span class="n">element</span> <span class="n">size:</span> <span class="mi">91</span>
+</span></span><span class="line"><span class="cl"><span class="o">-------------------</span>
+</span></span><span class="line"><span class="cl"><span class="sr">/home/</span><span class="n">fuyi</span><span class="sr">/GeoDatabase/</span><span class="n">China</span><span class="sr">/西藏自治区/</span><span class="n">西藏自治区_省界</span><span class="o">.</span><span class="n">shp</span>
+</span></span><span class="line"><span class="cl"><span class="n">current</span> <span class="n">element</span> <span class="n">size:</span> <span class="mi">5</span>
+</span></span><span class="line"><span class="cl"><span class="o">-------------------</span>
+</span></span><span class="line"><span class="cl"><span class="sr">/home/</span><span class="n">fuyi</span><span class="sr">/GeoDatabase/</span><span class="n">China</span><span class="sr">/西藏自治区/</span><span class="n">西藏自治区_市界</span><span class="o">.</span><span class="n">shp</span>
+</span></span><span class="line"><span class="cl"><span class="n">current</span> <span class="n">element</span> <span class="n">size:</span> <span class="mi">14</span>
+</span></span><span class="line"><span class="cl"><span class="o">-------------------</span>
+</span></span><span class="line"><span class="cl"><span class="sr">/home/</span><span class="n">fuyi</span><span class="sr">/GeoDatabase/</span><span class="n">China</span><span class="sr">/西藏自治区/</span><span class="n">西藏自治区_乡镇边界</span><span class="o">.</span><span class="n">shp</span>
+</span></span><span class="line"><span class="cl"><span class="n">current</span> <span class="n">element</span> <span class="n">size:</span> <span class="mi">737</span>
+</span></span><span class="line"><span class="cl"><span class="o">-------------------</span>
+</span></span><span class="line"><span class="cl"><span class="sr">/home/</span><span class="n">fuyi</span><span class="sr">/GeoDatabase/</span><span class="n">China</span><span class="sr">/天津市/</span><span class="n">天津市_县界</span><span class="o">.</span><span class="n">shp</span>
+</span></span><span class="line"><span class="cl"><span class="n">current</span> <span class="n">element</span> <span class="n">size:</span> <span class="mi">32</span>
+</span></span><span class="line"><span class="cl"><span class="o">-------------------</span>
+</span></span><span class="line"><span class="cl"><span class="sr">/home/</span><span class="n">fuyi</span><span class="sr">/GeoDatabase/</span><span class="n">China</span><span class="sr">/天津市/</span><span class="n">天津市_省界</span><span class="o">.</span><span class="n">shp</span>
+</span></span><span class="line"><span class="cl"><span class="n">current</span> <span class="n">element</span> <span class="n">size:</span> <span class="mi">2</span>
+</span></span><span class="line"><span class="cl"><span class="o">-------------------</span>
+</span></span><span class="line"><span class="cl"><span class="sr">/home/</span><span class="n">fuyi</span><span class="sr">/GeoDatabase/</span><span class="n">China</span><span class="sr">/天津市/</span><span class="n">天津市_市界</span><span class="o">.</span><span class="n">shp</span>
+</span></span><span class="line"><span class="cl"><span class="n">current</span> <span class="n">element</span> <span class="n">size:</span> <span class="mi">4</span>
+</span></span><span class="line"><span class="cl"><span class="o">-------------------</span>
+</span></span><span class="line"><span class="cl"><span class="sr">/home/</span><span class="n">fuyi</span><span class="sr">/GeoDatabase/</span><span class="n">China</span><span class="sr">/天津市/</span><span class="n">天津市_乡镇边界</span><span class="o">.</span><span class="n">shp</span>
+</span></span><span class="line"><span class="cl"><span class="n">current</span> <span class="n">element</span> <span class="n">size:</span> <span class="mi">360</span>
+</span></span><span class="line"><span class="cl"><span class="o">-------------------</span>
+</span></span><span class="line"><span class="cl"><span class="sr">/home/</span><span class="n">fuyi</span><span class="sr">/GeoDatabase/</span><span class="n">China</span><span class="sr">/台湾省/</span><span class="n">台湾省_村名</span><span class="o">.</span><span class="n">shp</span>
+</span></span><span class="line"><span class="cl"><span class="n">current</span> <span class="n">element</span> <span class="n">size:</span> <span class="mi">0</span>
+</span></span><span class="line"><span class="cl"><span class="o">-------------------</span>
+</span></span><span class="line"><span class="cl"><span class="sr">/home/</span><span class="n">fuyi</span><span class="sr">/GeoDatabase/</span><span class="n">China</span><span class="sr">/台湾省/</span><span class="n">台湾省_乡镇名称</span><span class="o">.</span><span class="n">shp</span>
+</span></span><span class="line"><span class="cl"><span class="n">current</span> <span class="n">element</span> <span class="n">size:</span> <span class="mi">0</span>
+</span></span><span class="line"><span class="cl"><span class="o">-------------------</span>
+</span></span><span class="line"><span class="cl"><span class="sr">/home/</span><span class="n">fuyi</span><span class="sr">/GeoDatabase/</span><span class="n">China</span><span class="sr">/台湾省/</span><span class="n">台湾省_县名称</span><span class="o">.</span><span class="n">shp</span>
+</span></span><span class="line"><span class="cl"><span class="n">current</span> <span class="n">element</span> <span class="n">size:</span> <span class="mi">0</span>
+</span></span><span class="line"><span class="cl"><span class="o">-------------------</span>
+</span></span><span class="line"><span class="cl"><span class="sr">/home/</span><span class="n">fuyi</span><span class="sr">/GeoDatabase/</span><span class="n">China</span><span class="sr">/广西省/</span><span class="n">广西省_省界</span><span class="o">.</span><span class="n">shp</span>
+</span></span><span class="line"><span class="cl"><span class="n">current</span> <span class="n">element</span> <span class="n">size:</span> <span class="mi">3</span>
+</span></span><span class="line"><span class="cl"><span class="o">-------------------</span>
+</span></span><span class="line"><span class="cl"><span class="sr">/home/</span><span class="n">fuyi</span><span class="sr">/GeoDatabase/</span><span class="n">China</span><span class="sr">/广西省/</span><span class="n">广西省_市界</span><span class="o">.</span><span class="n">shp</span>
+</span></span><span class="line"><span class="cl"><span class="n">current</span> <span class="n">element</span> <span class="n">size:</span> <span class="mi">25</span>
+</span></span><span class="line"><span class="cl"><span class="o">-------------------</span>
+</span></span><span class="line"><span class="cl"><span class="sr">/home/</span><span class="n">fuyi</span><span class="sr">/GeoDatabase/</span><span class="n">China</span><span class="sr">/广西省/</span><span class="n">广西省_县界</span><span class="o">.</span><span class="n">shp</span>
+</span></span><span class="line"><span class="cl"><span class="n">current</span> <span class="n">element</span> <span class="n">size:</span> <span class="mi">142</span>
+</span></span><span class="line"><span class="cl"><span class="o">-------------------</span>
+</span></span><span class="line"><span class="cl"><span class="sr">/home/</span><span class="n">fuyi</span><span class="sr">/GeoDatabase/</span><span class="n">China</span><span class="sr">/广西省/</span><span class="n">广西省_乡镇边界</span><span class="o">.</span><span class="n">shp</span>
+</span></span><span class="line"><span class="cl"><span class="n">current</span> <span class="n">element</span> <span class="n">size:</span> <span class="mi">1433</span>
+</span></span><span class="line"><span class="cl"><span class="o">-------------------</span>
+</span></span><span class="line"><span class="cl"><span class="sr">/home/</span><span class="n">fuyi</span><span class="sr">/GeoDatabase/</span><span class="n">China</span><span class="sr">/香港特别行政区/</span><span class="n">香港特别行政区_乡镇边界</span><span class="o">.</span><span class="n">shp</span>
+</span></span><span class="line"><span class="cl"><span class="n">current</span> <span class="n">element</span> <span class="n">size:</span> <span class="mi">8</span>
+</span></span><span class="line"><span class="cl"><span class="o">-------------------</span>
+</span></span><span class="line"><span class="cl"><span class="sr">/home/</span><span class="n">fuyi</span><span class="sr">/GeoDatabase/</span><span class="n">China</span><span class="sr">/香港特别行政区/</span><span class="n">香港特别行政区_县界</span><span class="o">.</span><span class="n">shp</span>
+</span></span><span class="line"><span class="cl"><span class="n">current</span> <span class="n">element</span> <span class="n">size:</span> <span class="mi">21</span>
+</span></span><span class="line"><span class="cl"><span class="o">-------------------</span>
+</span></span><span class="line"><span class="cl"><span class="sr">/home/</span><span class="n">fuyi</span><span class="sr">/GeoDatabase/</span><span class="n">China</span><span class="sr">/香港特别行政区/</span><span class="n">香港特别行政区_省界</span><span class="o">.</span><span class="n">shp</span>
+</span></span><span class="line"><span class="cl"><span class="n">current</span> <span class="n">element</span> <span class="n">size:</span> <span class="mi">2</span>
+</span></span><span class="line"><span class="cl"><span class="o">-------------------</span>
+</span></span><span class="line"><span class="cl"><span class="sr">/home/</span><span class="n">fuyi</span><span class="sr">/GeoDatabase/</span><span class="n">China</span><span class="sr">/香港特别行政区/</span><span class="n">香港特别行政区_市界</span><span class="o">.</span><span class="n">shp</span>
+</span></span><span class="line"><span class="cl"><span class="n">current</span> <span class="n">element</span> <span class="n">size:</span> <span class="mi">1</span>
+</span></span><span class="line"><span class="cl"><span class="o">-------------------</span>
+</span></span><span class="line"><span class="cl"><span class="sr">/home/</span><span class="n">fuyi</span><span class="sr">/GeoDatabase/</span><span class="n">China</span><span class="sr">/安徽省/</span><span class="n">安徽省_市界</span><span class="o">.</span><span class="n">shp</span>
+</span></span><span class="line"><span class="cl"><span class="n">current</span> <span class="n">element</span> <span class="n">size:</span> <span class="mi">34</span>
+</span></span><span class="line"><span class="cl"><span class="o">-------------------</span>
+</span></span><span class="line"><span class="cl"><span class="sr">/home/</span><span class="n">fuyi</span><span class="sr">/GeoDatabase/</span><span class="n">China</span><span class="sr">/安徽省/</span><span class="n">安徽省_乡镇边界</span><span class="o">.</span><span class="n">shp</span>
+</span></span><span class="line"><span class="cl"><span class="n">current</span> <span class="n">element</span> <span class="n">size:</span> <span class="mi">1832</span>
+</span></span><span class="line"><span class="cl"><span class="o">-------------------</span>
+</span></span><span class="line"><span class="cl"><span class="sr">/home/</span><span class="n">fuyi</span><span class="sr">/GeoDatabase/</span><span class="n">China</span><span class="sr">/安徽省/</span><span class="n">安徽省_省界</span><span class="o">.</span><span class="n">shp</span>
+</span></span><span class="line"><span class="cl"><span class="n">current</span> <span class="n">element</span> <span class="n">size:</span> <span class="mi">6</span>
+</span></span><span class="line"><span class="cl"><span class="o">-------------------</span>
+</span></span><span class="line"><span class="cl"><span class="sr">/home/</span><span class="n">fuyi</span><span class="sr">/GeoDatabase/</span><span class="n">China</span><span class="sr">/安徽省/</span><span class="n">安徽省_县界</span><span class="o">.</span><span class="n">shp</span>
+</span></span><span class="line"><span class="cl"><span class="n">current</span> <span class="n">element</span> <span class="n">size:</span> <span class="mi">149</span>
+</span></span><span class="line"><span class="cl"><span class="o">-------------------</span>
+</span></span><span class="line"><span class="cl"><span class="sr">/home/</span><span class="n">fuyi</span><span class="sr">/GeoDatabase/</span><span class="n">China</span><span class="sr">/河南省/</span><span class="n">河南省_市界</span><span class="o">.</span><span class="n">shp</span>
+</span></span><span class="line"><span class="cl"><span class="n">current</span> <span class="n">element</span> <span class="n">size:</span> <span class="mi">38</span>
+</span></span><span class="line"><span class="cl"><span class="o">-------------------</span>
+</span></span><span class="line"><span class="cl"><span class="sr">/home/</span><span class="n">fuyi</span><span class="sr">/GeoDatabase/</span><span class="n">China</span><span class="sr">/河南省/</span><span class="n">河南省_乡镇边界</span><span class="o">.</span><span class="n">shp</span>
+</span></span><span class="line"><span class="cl"><span class="n">current</span> <span class="n">element</span> <span class="n">size:</span> <span class="mi">2722</span>
+</span></span><span class="line"><span class="cl"><span class="o">-------------------</span>
+</span></span><span class="line"><span class="cl"><span class="sr">/home/</span><span class="n">fuyi</span><span class="sr">/GeoDatabase/</span><span class="n">China</span><span class="sr">/河南省/</span><span class="n">河南省_县界</span><span class="o">.</span><span class="n">shp</span>
+</span></span><span class="line"><span class="cl"><span class="n">current</span> <span class="n">element</span> <span class="n">size:</span> <span class="mi">209</span>
+</span></span><span class="line"><span class="cl"><span class="o">-------------------</span>
+</span></span><span class="line"><span class="cl"><span class="sr">/home/</span><span class="n">fuyi</span><span class="sr">/GeoDatabase/</span><span class="n">China</span><span class="sr">/河南省/</span><span class="n">河南省_省界</span><span class="o">.</span><span class="n">shp</span>
+</span></span><span class="line"><span class="cl"><span class="n">current</span> <span class="n">element</span> <span class="n">size:</span> <span class="mi">7</span>
+</span></span><span class="line"><span class="cl"><span class="o">-------------------</span>
+</span></span><span class="line"><span class="cl"><span class="sr">/home/</span><span class="n">fuyi</span><span class="sr">/GeoDatabase/</span><span class="n">China</span><span class="sr">/黑龙江省/</span><span class="n">黑龙江省_市界</span><span class="o">.</span><span class="n">shp</span>
+</span></span><span class="line"><span class="cl"><span class="n">current</span> <span class="n">element</span> <span class="n">size:</span> <span class="mi">20</span>
+</span></span><span class="line"><span class="cl"><span class="o">-------------------</span>
+</span></span><span class="line"><span class="cl"><span class="sr">/home/</span><span class="n">fuyi</span><span class="sr">/GeoDatabase/</span><span class="n">China</span><span class="sr">/黑龙江省/</span><span class="n">黑龙江省_省界</span><span class="o">.</span><span class="n">shp</span>
+</span></span><span class="line"><span class="cl"><span class="n">current</span> <span class="n">element</span> <span class="n">size:</span> <span class="mi">3</span>
+</span></span><span class="line"><span class="cl"><span class="o">-------------------</span>
+</span></span><span class="line"><span class="cl"><span class="sr">/home/</span><span class="n">fuyi</span><span class="sr">/GeoDatabase/</span><span class="n">China</span><span class="sr">/黑龙江省/</span><span class="n">黑龙江省_县界</span><span class="o">.</span><span class="n">shp</span>
+</span></span><span class="line"><span class="cl"><span class="n">current</span> <span class="n">element</span> <span class="n">size:</span> <span class="mi">150</span>
+</span></span><span class="line"><span class="cl"><span class="o">-------------------</span>
+</span></span><span class="line"><span class="cl"><span class="sr">/home/</span><span class="n">fuyi</span><span class="sr">/GeoDatabase/</span><span class="n">China</span><span class="sr">/黑龙江省/</span><span class="n">黑龙江省_乡镇边界</span><span class="o">.</span><span class="n">shp</span>
+</span></span><span class="line"><span class="cl"><span class="n">current</span> <span class="n">element</span> <span class="n">size:</span> <span class="mi">1874</span>
+</span></span><span class="line"><span class="cl"><span class="o">-------------------</span>
+</span></span><span class="line"><span class="cl"><span class="sr">/home/</span><span class="n">fuyi</span><span class="sr">/GeoDatabase/</span><span class="n">China</span><span class="sr">/澳门特别行政区/</span><span class="n">澳门特别行政区_市界</span><span class="o">.</span><span class="n">shp</span>
+</span></span><span class="line"><span class="cl"><span class="n">current</span> <span class="n">element</span> <span class="n">size:</span> <span class="mi">1</span>
+</span></span><span class="line"><span class="cl"><span class="o">-------------------</span>
+</span></span><span class="line"><span class="cl"><span class="sr">/home/</span><span class="n">fuyi</span><span class="sr">/GeoDatabase/</span><span class="n">China</span><span class="sr">/澳门特别行政区/</span><span class="n">澳门特别行政区_省界</span><span class="o">.</span><span class="n">shp</span>
+</span></span><span class="line"><span class="cl"><span class="n">current</span> <span class="n">element</span> <span class="n">size:</span> <span class="mi">2</span>
+</span></span><span class="line"><span class="cl"><span class="o">-------------------</span>
+</span></span><span class="line"><span class="cl"><span class="sr">/home/</span><span class="n">fuyi</span><span class="sr">/GeoDatabase/</span><span class="n">China</span><span class="sr">/澳门特别行政区/</span><span class="n">澳门特别行政区_乡镇边界</span><span class="o">.</span><span class="n">shp</span>
+</span></span><span class="line"><span class="cl"><span class="n">current</span> <span class="n">element</span> <span class="n">size:</span> <span class="mi">4</span>
+</span></span><span class="line"><span class="cl"><span class="o">-------------------</span>
+</span></span><span class="line"><span class="cl"><span class="sr">/home/</span><span class="n">fuyi</span><span class="sr">/GeoDatabase/</span><span class="n">China</span><span class="sr">/澳门特别行政区/</span><span class="n">澳门特别行政区_县界</span><span class="o">.</span><span class="n">shp</span>
+</span></span><span class="line"><span class="cl"><span class="n">current</span> <span class="n">element</span> <span class="n">size:</span> <span class="mi">9</span>
+</span></span><span class="line"><span class="cl"><span class="o">-------------------</span>
+</span></span><span class="line"><span class="cl"><span class="sr">/home/</span><span class="n">fuyi</span><span class="sr">/GeoDatabase/</span><span class="n">China</span><span class="sr">/吉林省/</span><span class="n">吉林省_省界</span><span class="o">.</span><span class="n">shp</span>
+</span></span><span class="line"><span class="cl"><span class="n">current</span> <span class="n">element</span> <span class="n">size:</span> <span class="mi">4</span>
+</span></span><span class="line"><span class="cl"><span class="o">-------------------</span>
+</span></span><span class="line"><span class="cl"><span class="sr">/home/</span><span class="n">fuyi</span><span class="sr">/GeoDatabase/</span><span class="n">China</span><span class="sr">/吉林省/</span><span class="n">吉林省_县界</span><span class="o">.</span><span class="n">shp</span>
+</span></span><span class="line"><span class="cl"><span class="n">current</span> <span class="n">element</span> <span class="n">size:</span> <span class="mi">82</span>
+</span></span><span class="line"><span class="cl"><span class="o">-------------------</span>
+</span></span><span class="line"><span class="cl"><span class="sr">/home/</span><span class="n">fuyi</span><span class="sr">/GeoDatabase/</span><span class="n">China</span><span class="sr">/吉林省/</span><span class="n">吉林省_乡镇边界</span><span class="o">.</span><span class="n">shp</span>
+</span></span><span class="line"><span class="cl"><span class="n">current</span> <span class="n">element</span> <span class="n">size:</span> <span class="mi">1134</span>
+</span></span><span class="line"><span class="cl"><span class="o">-------------------</span>
+</span></span><span class="line"><span class="cl"><span class="sr">/home/</span><span class="n">fuyi</span><span class="sr">/GeoDatabase/</span><span class="n">China</span><span class="sr">/吉林省/</span><span class="n">吉林省_市界</span><span class="o">.</span><span class="n">shp</span>
+</span></span><span class="line"><span class="cl"><span class="n">current</span> <span class="n">element</span> <span class="n">size:</span> <span class="mi">19</span>
+</span></span><span class="line"><span class="cl"><span class="o">-------------------</span>
+</span></span><span class="line"><span class="cl"><span class="sr">/home/</span><span class="n">fuyi</span><span class="sr">/GeoDatabase/</span><span class="n">China</span><span class="sr">/北京市/</span><span class="n">北京市_县界</span><span class="o">.</span><span class="n">shp</span>
+</span></span><span class="line"><span class="cl"><span class="n">current</span> <span class="n">element</span> <span class="n">size:</span> <span class="mi">32</span>
+</span></span><span class="line"><span class="cl"><span class="o">-------------------</span>
+</span></span><span class="line"><span class="cl"><span class="sr">/home/</span><span class="n">fuyi</span><span class="sr">/GeoDatabase/</span><span class="n">China</span><span class="sr">/北京市/</span><span class="n">北京市_乡镇边界</span><span class="o">.</span><span class="n">shp</span>
+</span></span><span class="line"><span class="cl"><span class="n">current</span> <span class="n">element</span> <span class="n">size:</span> <span class="mi">395</span>
+</span></span><span class="line"><span class="cl"><span class="o">-------------------</span>
+</span></span><span class="line"><span class="cl"><span class="sr">/home/</span><span class="n">fuyi</span><span class="sr">/GeoDatabase/</span><span class="n">China</span><span class="sr">/北京市/</span><span class="n">北京市_市界</span><span class="o">.</span><span class="n">shp</span>
+</span></span><span class="line"><span class="cl"><span class="n">current</span> <span class="n">element</span> <span class="n">size:</span> <span class="mi">4</span>
+</span></span><span class="line"><span class="cl"><span class="o">-------------------</span>
+</span></span><span class="line"><span class="cl"><span class="sr">/home/</span><span class="n">fuyi</span><span class="sr">/GeoDatabase/</span><span class="n">China</span><span class="sr">/北京市/</span><span class="n">北京市_省界</span><span class="o">.</span><span class="n">shp</span>
+</span></span><span class="line"><span class="cl"><span class="n">current</span> <span class="n">element</span> <span class="n">size:</span> <span class="mi">3</span>
+</span></span><span class="line"><span class="cl"><span class="o">-------------------</span>
+</span></span><span class="line"><span class="cl"><span class="sr">/home/</span><span class="n">fuyi</span><span class="sr">/GeoDatabase/</span><span class="n">China</span><span class="sr">/四川省/</span><span class="n">四川省_乡镇边界</span><span class="o">.</span><span class="n">shp</span>
+</span></span><span class="line"><span class="cl"><span class="n">current</span> <span class="n">element</span> <span class="n">size:</span> <span class="mi">4933</span>
+</span></span><span class="line"><span class="cl"><span class="o">-------------------</span>
+</span></span><span class="line"><span class="cl"><span class="sr">/home/</span><span class="n">fuyi</span><span class="sr">/GeoDatabase/</span><span class="n">China</span><span class="sr">/四川省/</span><span class="n">四川省_市界</span><span class="o">.</span><span class="n">shp</span>
+</span></span><span class="line"><span class="cl"><span class="n">current</span> <span class="n">element</span> <span class="n">size:</span> <span class="mi">32</span>
+</span></span><span class="line"><span class="cl"><span class="o">-------------------</span>
+</span></span><span class="line"><span class="cl"><span class="sr">/home/</span><span class="n">fuyi</span><span class="sr">/GeoDatabase/</span><span class="n">China</span><span class="sr">/四川省/</span><span class="n">四川省_省界</span><span class="o">.</span><span class="n">shp</span>
+</span></span><span class="line"><span class="cl"><span class="n">current</span> <span class="n">element</span> <span class="n">size:</span> <span class="mi">7</span>
+</span></span><span class="line"><span class="cl"><span class="o">-------------------</span>
+</span></span><span class="line"><span class="cl"><span class="sr">/home/</span><span class="n">fuyi</span><span class="sr">/GeoDatabase/</span><span class="n">China</span><span class="sr">/四川省/</span><span class="n">四川省_县界</span><span class="o">.</span><span class="n">shp</span>
+</span></span><span class="line"><span class="cl"><span class="n">current</span> <span class="n">element</span> <span class="n">size:</span> <span class="mi">237</span>
+</span></span><span class="line"><span class="cl"><span class="o">-------------------</span>
+</span></span><span class="line"><span class="cl"><span class="sr">/home/</span><span class="n">fuyi</span><span class="sr">/GeoDatabase/</span><span class="n">China</span><span class="sr">/上海市/</span><span class="n">上海市_省界</span><span class="o">.</span><span class="n">shp</span>
+</span></span><span class="line"><span class="cl"><span class="n">current</span> <span class="n">element</span> <span class="n">size:</span> <span class="mi">3</span>
+</span></span><span class="line"><span class="cl"><span class="o">-------------------</span>
+</span></span><span class="line"><span class="cl"><span class="sr">/home/</span><span class="n">fuyi</span><span class="sr">/GeoDatabase/</span><span class="n">China</span><span class="sr">/上海市/</span><span class="n">上海市_乡镇边界</span><span class="o">.</span><span class="n">shp</span>
+</span></span><span class="line"><span class="cl"><span class="n">current</span> <span class="n">element</span> <span class="n">size:</span> <span class="mi">251</span>
+</span></span><span class="line"><span class="cl"><span class="o">-------------------</span>
+</span></span><span class="line"><span class="cl"><span class="sr">/home/</span><span class="n">fuyi</span><span class="sr">/GeoDatabase/</span><span class="n">China</span><span class="sr">/上海市/</span><span class="n">上海市_县界</span><span class="o">.</span><span class="n">shp</span>
+</span></span><span class="line"><span class="cl"><span class="n">current</span> <span class="n">element</span> <span class="n">size:</span> <span class="mi">24</span>
+</span></span><span class="line"><span class="cl"><span class="o">-------------------</span>
+</span></span><span class="line"><span class="cl"><span class="sr">/home/</span><span class="n">fuyi</span><span class="sr">/GeoDatabase/</span><span class="n">China</span><span class="sr">/上海市/</span><span class="n">上海市_市界</span><span class="o">.</span><span class="n">shp</span>
+</span></span><span class="line"><span class="cl"><span class="n">current</span> <span class="n">element</span> <span class="n">size:</span> <span class="mi">4</span>
+</span></span><span class="line"><span class="cl"><span class="o">-------------------</span>
+</span></span><span class="line"><span class="cl"><span class="sr">/home/</span><span class="n">fuyi</span><span class="sr">/GeoDatabase/</span><span class="n">China</span><span class="sr">/甘肃省/</span><span class="n">甘肃省_县界</span><span class="o">.</span><span class="n">shp</span>
+</span></span><span class="line"><span class="cl"><span class="n">current</span> <span class="n">element</span> <span class="n">size:</span> <span class="mi">137</span>
+</span></span><span class="line"><span class="cl"><span class="o">-------------------</span>
+</span></span><span class="line"><span class="cl"><span class="sr">/home/</span><span class="n">fuyi</span><span class="sr">/GeoDatabase/</span><span class="n">China</span><span class="sr">/甘肃省/</span><span class="n">甘肃省_市界</span><span class="o">.</span><span class="n">shp</span>
+</span></span><span class="line"><span class="cl"><span class="n">current</span> <span class="n">element</span> <span class="n">size:</span> <span class="mi">33</span>
+</span></span><span class="line"><span class="cl"><span class="o">-------------------</span>
+</span></span><span class="line"><span class="cl"><span class="sr">/home/</span><span class="n">fuyi</span><span class="sr">/GeoDatabase/</span><span class="n">China</span><span class="sr">/甘肃省/</span><span class="n">甘肃省_省界</span><span class="o">.</span><span class="n">shp</span>
+</span></span><span class="line"><span class="cl"><span class="n">current</span> <span class="n">element</span> <span class="n">size:</span> <span class="mi">7</span>
+</span></span><span class="line"><span class="cl"><span class="o">-------------------</span>
+</span></span><span class="line"><span class="cl"><span class="sr">/home/</span><span class="n">fuyi</span><span class="sr">/GeoDatabase/</span><span class="n">China</span><span class="sr">/甘肃省/</span><span class="n">甘肃省_乡镇边界</span><span class="o">.</span><span class="n">shp</span>
+</span></span><span class="line"><span class="cl"><span class="n">current</span> <span class="n">element</span> <span class="n">size:</span> <span class="mi">1601</span>
+</span></span><span class="line"><span class="cl"><span class="o">-------------------</span>
+</span></span><span class="line"><span class="cl"><span class="sr">/home/</span><span class="n">fuyi</span><span class="sr">/GeoDatabase/</span><span class="n">China</span><span class="sr">/福建省/</span><span class="n">福建省_市界</span><span class="o">.</span><span class="n">shp</span>
+</span></span><span class="line"><span class="cl"><span class="n">current</span> <span class="n">element</span> <span class="n">size:</span> <span class="mi">18</span>
+</span></span><span class="line"><span class="cl"><span class="o">-------------------</span>
+</span></span><span class="line"><span class="cl"><span class="sr">/home/</span><span class="n">fuyi</span><span class="sr">/GeoDatabase/</span><span class="n">China</span><span class="sr">/福建省/</span><span class="n">福建省_乡镇边界</span><span class="o">.</span><span class="n">shp</span>
+</span></span><span class="line"><span class="cl"><span class="n">current</span> <span class="n">element</span> <span class="n">size:</span> <span class="mi">1272</span>
+</span></span><span class="line"><span class="cl"><span class="o">-------------------</span>
+</span></span><span class="line"><span class="cl"><span class="sr">/home/</span><span class="n">fuyi</span><span class="sr">/GeoDatabase/</span><span class="n">China</span><span class="sr">/福建省/</span><span class="n">福建省_省界</span><span class="o">.</span><span class="n">shp</span>
+</span></span><span class="line"><span class="cl"><span class="n">current</span> <span class="n">element</span> <span class="n">size:</span> <span class="mi">4</span>
+</span></span><span class="line"><span class="cl"><span class="o">-------------------</span>
+</span></span><span class="line"><span class="cl"><span class="sr">/home/</span><span class="n">fuyi</span><span class="sr">/GeoDatabase/</span><span class="n">China</span><span class="sr">/福建省/</span><span class="n">福建省_县界</span><span class="o">.</span><span class="n">shp</span>
+</span></span><span class="line"><span class="cl"><span class="n">current</span> <span class="n">element</span> <span class="n">size:</span> <span class="mi">109</span>
+</span></span><span class="line"><span class="cl"><span class="o">-------------------</span>
+</span></span><span class="line"><span class="cl"><span class="sr">/home/</span><span class="n">fuyi</span><span class="sr">/GeoDatabase/</span><span class="n">China</span><span class="sr">/河北省/</span><span class="n">河北省_市界</span><span class="o">.</span><span class="n">shp</span>
+</span></span><span class="line"><span class="cl"><span class="n">current</span> <span class="n">element</span> <span class="n">size:</span> <span class="mi">26</span>
+</span></span><span class="line"><span class="cl"><span class="o">-------------------</span>
+</span></span><span class="line"><span class="cl"><span class="sr">/home/</span><span class="n">fuyi</span><span class="sr">/GeoDatabase/</span><span class="n">China</span><span class="sr">/河北省/</span><span class="n">河北省_乡镇边界</span><span class="o">.</span><span class="n">shp</span>
+</span></span><span class="line"><span class="cl"><span class="n">current</span> <span class="n">element</span> <span class="n">size:</span> <span class="mi">2574</span>
+</span></span><span class="line"><span class="cl"><span class="o">-------------------</span>
+</span></span><span class="line"><span class="cl"><span class="sr">/home/</span><span class="n">fuyi</span><span class="sr">/GeoDatabase/</span><span class="n">China</span><span class="sr">/河北省/</span><span class="n">河北省_省界</span><span class="o">.</span><span class="n">shp</span>
+</span></span><span class="line"><span class="cl"><span class="n">current</span> <span class="n">element</span> <span class="n">size:</span> <span class="mi">8</span>
+</span></span><span class="line"><span class="cl"><span class="o">-------------------</span>
+</span></span><span class="line"><span class="cl"><span class="sr">/home/</span><span class="n">fuyi</span><span class="sr">/GeoDatabase/</span><span class="n">China</span><span class="sr">/河北省/</span><span class="n">河北省_县界</span><span class="o">.</span><span class="n">shp</span>
+</span></span><span class="line"><span class="cl"><span class="n">current</span> <span class="n">element</span> <span class="n">size:</span> <span class="mi">225</span>
+</span></span><span class="line"><span class="cl"><span class="o">-------------------</span>
+</span></span><span class="line"><span class="cl"><span class="sr">/home/</span><span class="n">fuyi</span><span class="sr">/GeoDatabase/</span><span class="n">China</span><span class="sr">/贵州省/</span><span class="n">贵州省_乡镇边界</span><span class="o">.</span><span class="n">shp</span>
+</span></span><span class="line"><span class="cl"><span class="n">current</span> <span class="n">element</span> <span class="n">size:</span> <span class="mi">1791</span>
+</span></span><span class="line"><span class="cl"><span class="o">-------------------</span>
+</span></span><span class="line"><span class="cl"><span class="sr">/home/</span><span class="n">fuyi</span><span class="sr">/GeoDatabase/</span><span class="n">China</span><span class="sr">/贵州省/</span><span class="n">贵州省_县界</span><span class="o">.</span><span class="n">shp</span>
+</span></span><span class="line"><span class="cl"><span class="n">current</span> <span class="n">element</span> <span class="n">size:</span> <span class="mi">122</span>
+</span></span><span class="line"><span class="cl"><span class="o">-------------------</span>
+</span></span><span class="line"><span class="cl"><span class="sr">/home/</span><span class="n">fuyi</span><span class="sr">/GeoDatabase/</span><span class="n">China</span><span class="sr">/贵州省/</span><span class="n">贵州省_市界</span><span class="o">.</span><span class="n">shp</span>
+</span></span><span class="line"><span class="cl"><span class="n">current</span> <span class="n">element</span> <span class="n">size:</span> <span class="mi">16</span>
+</span></span><span class="line"><span class="cl"><span class="o">-------------------</span>
+</span></span><span class="line"><span class="cl"><span class="sr">/home/</span><span class="n">fuyi</span><span class="sr">/GeoDatabase/</span><span class="n">China</span><span class="sr">/贵州省/</span><span class="n">贵州省_省界</span><span class="o">.</span><span class="n">shp</span>
+</span></span><span class="line"><span class="cl"><span class="n">current</span> <span class="n">element</span> <span class="n">size:</span> <span class="mi">5</span>
+</span></span><span class="line"><span class="cl"><span class="o">-------------------</span>
+</span></span><span class="line"><span class="cl"><span class="sr">/home/</span><span class="n">fuyi</span><span class="sr">/GeoDatabase/</span><span class="n">China</span><span class="sr">/湖南省/</span><span class="n">湖南省_省界</span><span class="o">.</span><span class="n">shp</span>
+</span></span><span class="line"><span class="cl"><span class="n">current</span> <span class="n">element</span> <span class="n">size:</span> <span class="mi">6</span>
+</span></span><span class="line"><span class="cl"><span class="o">-------------------</span>
+</span></span><span class="line"><span class="cl"><span class="sr">/home/</span><span class="n">fuyi</span><span class="sr">/GeoDatabase/</span><span class="n">China</span><span class="sr">/湖南省/</span><span class="n">湖南省_市界</span><span class="o">.</span><span class="n">shp</span>
+</span></span><span class="line"><span class="cl"><span class="n">current</span> <span class="n">element</span> <span class="n">size:</span> <span class="mi">28</span>
+</span></span><span class="line"><span class="cl"><span class="o">-------------------</span>
+</span></span><span class="line"><span class="cl"><span class="sr">/home/</span><span class="n">fuyi</span><span class="sr">/GeoDatabase/</span><span class="n">China</span><span class="sr">/湖南省/</span><span class="n">湖南省_乡镇边界</span><span class="o">.</span><span class="n">shp</span>
+</span></span><span class="line"><span class="cl"><span class="n">current</span> <span class="n">element</span> <span class="n">size:</span> <span class="mi">2662</span>
+</span></span><span class="line"><span class="cl"><span class="o">-------------------</span>
+</span></span><span class="line"><span class="cl"><span class="sr">/home/</span><span class="n">fuyi</span><span class="sr">/GeoDatabase/</span><span class="n">China</span><span class="sr">/湖南省/</span><span class="n">湖南省_县界</span><span class="o">.</span><span class="n">shp</span>
+</span></span><span class="line"><span class="cl"><span class="n">current</span> <span class="n">element</span> <span class="n">size:</span> <span class="mi">169</span>
+</span></span><span class="line"><span class="cl"><span class="o">-------------------</span>
+</span></span><span class="line"><span class="cl"><span class="sr">/home/</span><span class="n">fuyi</span><span class="sr">/GeoDatabase/</span><span class="n">China</span><span class="sr">/山西省/</span><span class="n">山西省_县界</span><span class="o">.</span><span class="n">shp</span>
+</span></span><span class="line"><span class="cl"><span class="n">current</span> <span class="n">element</span> <span class="n">size:</span> <span class="mi">154</span>
+</span></span><span class="line"><span class="cl"><span class="o">-------------------</span>
+</span></span><span class="line"><span class="cl"><span class="sr">/home/</span><span class="n">fuyi</span><span class="sr">/GeoDatabase/</span><span class="n">China</span><span class="sr">/山西省/</span><span class="n">山西省_市界</span><span class="o">.</span><span class="n">shp</span>
+</span></span><span class="line"><span class="cl"><span class="n">current</span> <span class="n">element</span> <span class="n">size:</span> <span class="mi">28</span>
+</span></span><span class="line"><span class="cl"><span class="o">-------------------</span>
+</span></span><span class="line"><span class="cl"><span class="sr">/home/</span><span class="n">fuyi</span><span class="sr">/GeoDatabase/</span><span class="n">China</span><span class="sr">/山西省/</span><span class="n">山西省_乡镇边界</span><span class="o">.</span><span class="n">shp</span>
+</span></span><span class="line"><span class="cl"><span class="n">current</span> <span class="n">element</span> <span class="n">size:</span> <span class="mi">1580</span>
+</span></span><span class="line"><span class="cl"><span class="o">-------------------</span>
+</span></span><span class="line"><span class="cl"><span class="sr">/home/</span><span class="n">fuyi</span><span class="sr">/GeoDatabase/</span><span class="n">China</span><span class="sr">/山西省/</span><span class="n">山西省_省界</span><span class="o">.</span><span class="n">shp</span>
+</span></span><span class="line"><span class="cl"><span class="n">current</span> <span class="n">element</span> <span class="n">size:</span> <span class="mi">5</span>
+</span></span><span class="line"><span class="cl"><span class="o">-------------------</span>
+</span></span><span class="line"><span class="cl"><span class="sr">/home/</span><span class="n">fuyi</span><span class="sr">/GeoDatabase/</span><span class="n">China</span><span class="sr">/辽宁省/</span><span class="n">辽宁省_县界</span><span class="o">.</span><span class="n">shp</span>
+</span></span><span class="line"><span class="cl"><span class="n">current</span> <span class="n">element</span> <span class="n">size:</span> <span class="mi">123</span>
+</span></span><span class="line"><span class="cl"><span class="o">-------------------</span>
+</span></span><span class="line"><span class="cl"><span class="sr">/home/</span><span class="n">fuyi</span><span class="sr">/GeoDatabase/</span><span class="n">China</span><span class="sr">/辽宁省/</span><span class="n">辽宁省_市界</span><span class="o">.</span><span class="n">shp</span>
+</span></span><span class="line"><span class="cl"><span class="n">current</span> <span class="n">element</span> <span class="n">size:</span> <span class="mi">21</span>
+</span></span><span class="line"><span class="cl"><span class="o">-------------------</span>
+</span></span><span class="line"><span class="cl"><span class="sr">/home/</span><span class="n">fuyi</span><span class="sr">/GeoDatabase/</span><span class="n">China</span><span class="sr">/辽宁省/</span><span class="n">辽宁省_省界</span><span class="o">.</span><span class="n">shp</span>
+</span></span><span class="line"><span class="cl"><span class="n">current</span> <span class="n">element</span> <span class="n">size:</span> <span class="mi">4</span>
+</span></span><span class="line"><span class="cl"><span class="o">-------------------</span>
+</span></span><span class="line"><span class="cl"><span class="sr">/home/</span><span class="n">fuyi</span><span class="sr">/GeoDatabase/</span><span class="n">China</span><span class="sr">/辽宁省/</span><span class="n">辽宁省_乡镇边界</span><span class="o">.</span><span class="n">shp</span>
+</span></span><span class="line"><span class="cl"><span class="n">current</span> <span class="n">element</span> <span class="n">size:</span> <span class="mi">1659</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="n">Process</span> <span class="n">finished</span> <span class="n">with</span> <span class="nb">exit</span> <span class="n">code</span> <span class="mi">0</span>
+</span></span></code></pre></div><h2 id="参考">参考<a hidden class="anchor" aria-hidden="true" href="#参考">#</a></h2>
+<ul>
+<li><a href="https://zh.wikipedia.org/wiki/%E4%B8%AD%E5%8D%8E%E4%BA%BA%E6%B0%91%E5%85%B1%E5%92%8C%E5%9B%BD%E8%A1%8C%E6%94%BF%E5%8C%BA%E5%88%92%E4%BB%A3%E7%A0%81">wiki-中华人民共和国行政区划代码</a></li>
+<li><a href="https://zh.wikipedia.org/wiki/%E4%B8%AD%E5%8D%8E%E4%BA%BA%E6%B0%91%E5%85%B1%E5%92%8C%E5%9B%BD%E8%A1%8C%E6%94%BF%E5%8C%BA%E5%88%92%E4%BB%A3%E7%A0%81">geotools-shapeplugin</a></li>
+</ul>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-fallback" data-lang="fallback"><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">-- alter table district_info alter column center_point 
+</span></span><span class="line"><span class="cl">-- type Geometry(Point, 4326) USING ST_SetSRID(center_point, 4326);
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">-- ALTER TABLE district_info ALTER COLUMN bounds TYPE Geometry(MultiPolygon, 4326) USING ST_SetSRID(bounds, 4326);
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">select st_astext(center_point), * from district_info where grade = 1 order by id limit 1000 ;
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">select st_area(bounds) as area, * from district_info where grade = 1 and name like &#39;%海南%&#39;;
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">-- delete from district_info;
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">select code, count(*) as _count from district_info group by code order by _count desc;
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">select * from district_info;
+</span></span></code></pre></div>
+
+  </div>
+
+  <footer class="post-footer">
+    <ul class="post-tags">
+      <li><a href="https://fuyi-atlas.github.io/tags/weather/">Weather</a></li>
+    </ul>
+<nav class="paginav">
+  <a class="prev" href="https://fuyi-atlas.github.io/posts/program/micro-weather/006/">
+    <span class="title">« Prev</span>
+    <br>
+    <span>微天气—行政区划数据（二）</span>
+  </a>
+  <a class="next" href="https://fuyi-atlas.github.io/posts/program/map/how-to-build-a-vector-tile-service/">
+    <span class="title">Next »</span>
+    <br>
+    <span>如何构建一个矢量瓦片服务</span>
+  </a>
+</nav>
+
+  </footer>
+</article>
+    </main>
+    
+<footer class="footer">
+    <span>&copy; 2024 <a href="https://fuyi-atlas.github.io/">Fuyi Atlas</a></span>
+    <span>
+        Powered by
+        <a href="https://gohugo.io/" rel="noopener noreferrer" target="_blank">Hugo</a> &
+        <a href="https://github.com/adityatelange/hugo-PaperMod/" rel="noopener" target="_blank">PaperMod</a>
+    </span>
+</footer>
+<a href="#top" aria-label="go to top" title="Go to Top (Alt + G)" class="top-link" id="top-link" accesskey="g">
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 12 6" fill="currentColor">
+        <path d="M12 6H0l6-6z" />
+    </svg>
+</a>
+
+<script>
+    let menu = document.getElementById('menu')
+    if (menu) {
+        menu.scrollLeft = localStorage.getItem("menu-scroll-position");
+        menu.onscroll = function () {
+            localStorage.setItem("menu-scroll-position", menu.scrollLeft);
+        }
+    }
+
+    document.querySelectorAll('a[href^="#"]').forEach(anchor => {
+        anchor.addEventListener("click", function (e) {
+            e.preventDefault();
+            var id = this.getAttribute("href").substr(1);
+            if (!window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+                document.querySelector(`[id='${decodeURIComponent(id)}']`).scrollIntoView({
+                    behavior: "smooth"
+                });
+            } else {
+                document.querySelector(`[id='${decodeURIComponent(id)}']`).scrollIntoView();
+            }
+            if (id === "top") {
+                history.replaceState(null, null, " ");
+            } else {
+                history.pushState(null, null, `#${id}`);
+            }
+        });
+    });
+
+</script>
+<script>
+    var mybutton = document.getElementById("top-link");
+    window.onscroll = function () {
+        if (document.body.scrollTop > 800 || document.documentElement.scrollTop > 800) {
+            mybutton.style.visibility = "visible";
+            mybutton.style.opacity = "1";
+        } else {
+            mybutton.style.visibility = "hidden";
+            mybutton.style.opacity = "0";
+        }
+    };
+
+</script>
+<script>
+    document.getElementById("theme-toggle").addEventListener("click", () => {
+        if (document.body.className.includes("dark")) {
+            document.body.classList.remove('dark');
+            localStorage.setItem("pref-theme", 'light');
+        } else {
+            document.body.classList.add('dark');
+            localStorage.setItem("pref-theme", 'dark');
+        }
+    })
+
+</script>
+<script>
+    document.querySelectorAll('pre > code').forEach((codeblock) => {
+        const container = codeblock.parentNode.parentNode;
+
+        const copybutton = document.createElement('button');
+        copybutton.classList.add('copy-code');
+        copybutton.innerHTML = 'copy';
+
+        function copyingDone() {
+            copybutton.innerHTML = 'copied!';
+            setTimeout(() => {
+                copybutton.innerHTML = 'copy';
+            }, 2000);
+        }
+
+        copybutton.addEventListener('click', (cb) => {
+            if ('clipboard' in navigator) {
+                navigator.clipboard.writeText(codeblock.textContent);
+                copyingDone();
+                return;
+            }
+
+            const range = document.createRange();
+            range.selectNodeContents(codeblock);
+            const selection = window.getSelection();
+            selection.removeAllRanges();
+            selection.addRange(range);
+            try {
+                document.execCommand('copy');
+                copyingDone();
+            } catch (e) { };
+            selection.removeRange(range);
+        });
+
+        if (container.classList.contains("highlight")) {
+            container.appendChild(copybutton);
+        } else if (container.parentNode.firstChild == container) {
+            
+        } else if (codeblock.parentNode.parentNode.parentNode.parentNode.parentNode.nodeName == "TABLE") {
+            
+            codeblock.parentNode.parentNode.parentNode.parentNode.parentNode.appendChild(copybutton);
+        } else {
+            
+            codeblock.parentNode.appendChild(copybutton);
+        }
+    });
+</script>
+</body>
+
+</html>

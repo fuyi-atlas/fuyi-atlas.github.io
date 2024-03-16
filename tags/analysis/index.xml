@@ -1,0 +1,26 @@
+<?xml version="1.0" encoding="utf-8" standalone="yes"?>
+<rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom" xmlns:content="http://purl.org/rss/1.0/modules/content/">
+  <channel>
+    <title>Analysis on Fuyi Atlas</title>
+    <link>https://fuyi-atlas.github.io/tags/analysis/</link>
+    <description>Recent content in Analysis on Fuyi Atlas</description>
+    <generator>Hugo -- gohugo.io</generator>
+    <language>en</language>
+    <lastBuildDate>Tue, 14 Jul 2020 21:49:59 +0800</lastBuildDate>
+    <atom:link href="https://fuyi-atlas.github.io/tags/analysis/index.xml" rel="self" type="application/rss+xml" />
+    <item>
+      <title>Spring Data JPA 与 Mybatis 对比分析</title>
+      <link>https://fuyi-atlas.github.io/posts/program/spring-data-jpa/spring-data-jpa-vs-mybatis/</link>
+      <pubDate>Tue, 14 Jul 2020 21:49:59 +0800</pubDate>
+      <guid>https://fuyi-atlas.github.io/posts/program/spring-data-jpa/spring-data-jpa-vs-mybatis/</guid>
+      <description>前言 其实，手写jdbc也是蛮好玩的&amp;hellip;
+在企业开发过程中，除去一些特殊的要求外，基本上都会使用全自动或半自动的ORM框架代替原生JDBC进行数据库的访问。而在具体项目设计时，常常会根据项目业务情况进行技术选型。其中常用的ORM框架有：
+Mybatis Hibernate Spring Data JPA JdbcTemplate 在这里我们主要讨论Mybatis与Spring Data JPA。
+Spring Data JPA 1、JPA是什么 维基百科：JPA（Java Persistence API，Java持久化API）是一个Java应用程序接口规范，描述了使用Java标准平台（Java SE）和Java企业版平台（Java EE）的应用中的关系数据的管理。
+Spring Data JPA 全面解析：JPA (Java Persistence API) 是 Sun 官方提出的 Java 持久化规范。它为 Java 开发人员提供了一种对象/关联映射工具来管理 Java 应用中的关系数据。他的出现主要是为了简化现有的持久化开发工作和整合 ORM 技术，结束现在 Hibernate，TopLink，JDO 等 ORM 框架各自为营的局面。值得注意的是，JPA 是在充分吸收了现有 Hibernate，TopLink，JDO 等ORM框架的基础上发展而来的，具有易于使用，伸缩性强等优点。从目前的开发社区的反应上看，JPA 受到了极大的支持和赞扬，其中就包括了 Spring 与 EJB3.0 的开发团队
+JPA所维护的核心是实体（Entity Bean），而它是通过一个持久化上下文（Persistence Context）来使用的。持久化上下文包含了以前3个部分：
+对象关系映射（Object Relational Mapping，简称ORM）描述，JPA支持注解或XML两种形式的描述。 实体操作API，内置通用CRUD操作，来完成对象的持久化与查询。 查询语言，约定了面向对象的查询语句JPQL。 简单来说，JPA就是一种接口规范，一种定义了对象关系映射（ORM）以及实体对象的持久化接口标准的规范，并不是一套直接可用的产品（如：Hibernate）。
+2、什么是Spring Data JPA spring-data-jpa：Spring Data JPA是Spring Data系列的一个组成部分，可以轻松快捷的实现数据访问层的增强支持，这使得基于Spring且使用了数据库访问技术的应用程序更加容易构建。 Spring Data JPA 内置了简单数据库读写操作，包括分页查询，并提供接口以待增强。</description>
+    </item>
+  </channel>
+</rss>

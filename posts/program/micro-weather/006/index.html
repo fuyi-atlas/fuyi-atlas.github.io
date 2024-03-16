@@ -1,0 +1,834 @@
+<!DOCTYPE html>
+<html lang="en" dir="auto">
+
+<head><meta charset="utf-8">
+<meta http-equiv="X-UA-Compatible" content="IE=edge">
+<meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
+<meta name="robots" content="index, follow">
+<title>微天气—行政区划数据（二） | Fuyi Atlas</title>
+<meta name="keywords" content="weather">
+<meta name="description" content="前言 此前提到微天气应用程序需要使用到行政区划数据，不过上一章所使用的数据来源于网络，或多或少都可以考虑一下是否还有其他获取的方式，所以也就有了本文的内容。
+在这里，将基于全国1:100万基础地理信息数据进行行政区划数据的提取。本文用于记录使用程序实现全国1:100万基础地理信息数据合并的全过程。
+当然，本文产生的最重要原因其实并不是受到微天气的启发，更多的是个人想试一试能不能用。
+数据说明 全国1：100万公众版基础地理信息数据（2021）覆盖全国陆地范围和包括台湾岛、海南岛、钓鱼岛、南海诸岛在内的主要岛屿及其临近海域，共77幅1:100万图幅，该数据集整体现势性为2019年。数据采用2000国家大地坐标系，1985国家高程基准，经纬度坐标。
+为满足广大社会群众对地理信息数据资源的需求，经自然资源部授权，全国地理信息资源目录服务系统提供全国1:100万全图层要素免费下载的服务。下载数据采用1：100万标准图幅分发，内容包括水系、居民地及设施、交通、管线、境界与政区、地貌与土质、植被、地名及注记9个数据集，且保存要素间空间关系和相关属性信息。
+💡 提供下载的是矢量数据，不是最终地图，与符号化后的地图再可视化表达上存在一定差异。用户利用此数据编制地图，应当严格执行《地图管理条例》有关规定；编制的地图如需向社会公开的，还应当依法履行地图审核程序。
+成果规格 分幅编号及范围
+1：100万公众版基础地理信息数据（2021）的图幅总数为77幅，分幅数据按照GB/T 13989-2012《国家基本比例尺地形图分幅和编号》执行。空间存储单元为6°（经差）×4°（纬差）。
+坐标系统
+平面坐标系： 2000国家大地坐标系。 高程基准：1985国家高程基准。 地图投影：分幅数据采用地理坐标，坐标单位为度。 几何精度
+更新后地物点对于附近野外控制点的平面位置和高程中误差符合下表的要求，以两倍中误差值为最大误差。
+地物点误差 最小 最大 平面位置 100 500 高程 50 200 现势性
+1:100万地形数据现势性与更新使用的数据源的现势性一致，数据整体现势性达到2019年。
+成果数据组织 全国1：100万公众版地形数据（2021）内容包括水系、居民地及设施、交通、管线、境界与政区、地貌与土质、植被、地名及注记9个数据集。
+数据分层的命名采用四个字符，第一个字符代表数据分类，第二三个字符是数据内容的缩写，第四个字符代表几何类型。
+目标 实现分图层合并（处理图幅合并时接边问题） 水系（暂缓） 交通（暂缓） 境界与政区（国、省、市、县） 地名及注记 根据合并后的行政区划与地名注记，制作行政区划数据库 数据库使用PostgreSQL（PostGIS） 设计 图层解析程序 Java程序， 使用GDAL 读取GDB
+逻辑 根据《国家基本比例尺地形图分幅和编号》规定可知网格范围，通过网格范围动态生成对应网格的分幅编号，并以该编号进行数据检索。如果命中则根据成果数据组织规格以及相关标准对数据进行解析，如果未命中则跳过，直至网格扫描完毕。
+经度：72~138（E），43~53（11） 纬度：0~56（N），A~N（14） 即，网格范围:[43,53] x [A,N] 数据的处理流程可使用责任链模式进行，后续也方便加入其他的处理流程。即，整体的执行框架为策略模式&#43;责任链模式。为统一策略选择模型，在此提出图层定义（LayerDefinition）的概念。
+LayerDefinition由如下几个关键要素组成：
+图层数据源（LayerSource） driver：驱动，参考java.sql.UnWrapper实现 instance name catalog： schema： table： commonDefinitionKey ：常规定义缓存的key fieldDefinitionKey ：字段定义缓存的key featureCarrierKey ：要素载体缓存的key origin：数据来源（分幅文件路径） scale：比例尺（如：1000000，表示1:1000000） sourceSpatialRef：源坐标系（表现形式可为标准ID、PROJ Text、WKT Text） sinkSpatialRef：目标坐标系（表现形式可为标准ID、PROJ Text、WKT Text） featureCode：要素分类码，对应成果数据组织中的要素分类（如：C、B） name：图层命名，也是图层分类码 layerCode：图层分类码 release：释放格式（比如：WMTS、Shapefile、GDB…） 描述字符为：比例尺:源坐标系:目标坐标系:要素分类码:图层名称:释放格式，在描述字符串中，坐标系仅使用标准ID表示">
+<meta name="author" content="Fuyi">
+<link rel="canonical" href="https://fuyi-atlas.github.io/posts/program/micro-weather/006/">
+<link crossorigin="anonymous" href="/assets/css/stylesheet.a61ecc0df414536d559b3d0ca421e2b1de8f39b8a4910b32fedccecbc2c0d59c.css" integrity="sha256-ph7MDfQUU21Vmz0MpCHisd6PObikkQsy/tzOy8LA1Zw=" rel="preload stylesheet" as="style">
+<link rel="icon" href="https://fuyi-atlas.github.io/favicon.ico">
+<link rel="icon" type="image/png" sizes="16x16" href="https://fuyi-atlas.github.io/favicon-16x16.png">
+<link rel="icon" type="image/png" sizes="32x32" href="https://fuyi-atlas.github.io/favicon-32x32.png">
+<link rel="apple-touch-icon" href="https://fuyi-atlas.github.io/apple-touch-icon.png">
+<link rel="mask-icon" href="https://fuyi-atlas.github.io/safari-pinned-tab.svg">
+<meta name="theme-color" content="#2e2e33">
+<meta name="msapplication-TileColor" content="#2e2e33">
+<link rel="alternate" hreflang="en" href="https://fuyi-atlas.github.io/posts/program/micro-weather/006/">
+<noscript>
+    <style>
+        #theme-toggle,
+        .top-link {
+            display: none;
+        }
+
+    </style>
+    <style>
+        @media (prefers-color-scheme: dark) {
+            :root {
+                --theme: rgb(29, 30, 32);
+                --entry: rgb(46, 46, 51);
+                --primary: rgb(218, 218, 219);
+                --secondary: rgb(155, 156, 157);
+                --tertiary: rgb(65, 66, 68);
+                --content: rgb(196, 196, 197);
+                --code-block-bg: rgb(46, 46, 51);
+                --code-bg: rgb(55, 56, 62);
+                --border: rgb(51, 51, 51);
+            }
+
+            .list {
+                background: var(--theme);
+            }
+
+            .list:not(.dark)::-webkit-scrollbar-track {
+                background: 0 0;
+            }
+
+            .list:not(.dark)::-webkit-scrollbar-thumb {
+                border-color: var(--theme);
+            }
+        }
+
+    </style>
+</noscript><meta property="og:title" content="微天气—行政区划数据（二）" />
+<meta property="og:description" content="前言 此前提到微天气应用程序需要使用到行政区划数据，不过上一章所使用的数据来源于网络，或多或少都可以考虑一下是否还有其他获取的方式，所以也就有了本文的内容。
+在这里，将基于全国1:100万基础地理信息数据进行行政区划数据的提取。本文用于记录使用程序实现全国1:100万基础地理信息数据合并的全过程。
+当然，本文产生的最重要原因其实并不是受到微天气的启发，更多的是个人想试一试能不能用。
+数据说明 全国1：100万公众版基础地理信息数据（2021）覆盖全国陆地范围和包括台湾岛、海南岛、钓鱼岛、南海诸岛在内的主要岛屿及其临近海域，共77幅1:100万图幅，该数据集整体现势性为2019年。数据采用2000国家大地坐标系，1985国家高程基准，经纬度坐标。
+为满足广大社会群众对地理信息数据资源的需求，经自然资源部授权，全国地理信息资源目录服务系统提供全国1:100万全图层要素免费下载的服务。下载数据采用1：100万标准图幅分发，内容包括水系、居民地及设施、交通、管线、境界与政区、地貌与土质、植被、地名及注记9个数据集，且保存要素间空间关系和相关属性信息。
+💡 提供下载的是矢量数据，不是最终地图，与符号化后的地图再可视化表达上存在一定差异。用户利用此数据编制地图，应当严格执行《地图管理条例》有关规定；编制的地图如需向社会公开的，还应当依法履行地图审核程序。
+成果规格 分幅编号及范围
+1：100万公众版基础地理信息数据（2021）的图幅总数为77幅，分幅数据按照GB/T 13989-2012《国家基本比例尺地形图分幅和编号》执行。空间存储单元为6°（经差）×4°（纬差）。
+坐标系统
+平面坐标系： 2000国家大地坐标系。 高程基准：1985国家高程基准。 地图投影：分幅数据采用地理坐标，坐标单位为度。 几何精度
+更新后地物点对于附近野外控制点的平面位置和高程中误差符合下表的要求，以两倍中误差值为最大误差。
+地物点误差 最小 最大 平面位置 100 500 高程 50 200 现势性
+1:100万地形数据现势性与更新使用的数据源的现势性一致，数据整体现势性达到2019年。
+成果数据组织 全国1：100万公众版地形数据（2021）内容包括水系、居民地及设施、交通、管线、境界与政区、地貌与土质、植被、地名及注记9个数据集。
+数据分层的命名采用四个字符，第一个字符代表数据分类，第二三个字符是数据内容的缩写，第四个字符代表几何类型。
+目标 实现分图层合并（处理图幅合并时接边问题） 水系（暂缓） 交通（暂缓） 境界与政区（国、省、市、县） 地名及注记 根据合并后的行政区划与地名注记，制作行政区划数据库 数据库使用PostgreSQL（PostGIS） 设计 图层解析程序 Java程序， 使用GDAL 读取GDB
+逻辑 根据《国家基本比例尺地形图分幅和编号》规定可知网格范围，通过网格范围动态生成对应网格的分幅编号，并以该编号进行数据检索。如果命中则根据成果数据组织规格以及相关标准对数据进行解析，如果未命中则跳过，直至网格扫描完毕。
+经度：72~138（E），43~53（11） 纬度：0~56（N），A~N（14） 即，网格范围:[43,53] x [A,N] 数据的处理流程可使用责任链模式进行，后续也方便加入其他的处理流程。即，整体的执行框架为策略模式&#43;责任链模式。为统一策略选择模型，在此提出图层定义（LayerDefinition）的概念。
+LayerDefinition由如下几个关键要素组成：
+图层数据源（LayerSource） driver：驱动，参考java.sql.UnWrapper实现 instance name catalog： schema： table： commonDefinitionKey ：常规定义缓存的key fieldDefinitionKey ：字段定义缓存的key featureCarrierKey ：要素载体缓存的key origin：数据来源（分幅文件路径） scale：比例尺（如：1000000，表示1:1000000） sourceSpatialRef：源坐标系（表现形式可为标准ID、PROJ Text、WKT Text） sinkSpatialRef：目标坐标系（表现形式可为标准ID、PROJ Text、WKT Text） featureCode：要素分类码，对应成果数据组织中的要素分类（如：C、B） name：图层命名，也是图层分类码 layerCode：图层分类码 release：释放格式（比如：WMTS、Shapefile、GDB…） 描述字符为：比例尺:源坐标系:目标坐标系:要素分类码:图层名称:释放格式，在描述字符串中，坐标系仅使用标准ID表示" />
+<meta property="og:type" content="article" />
+<meta property="og:url" content="https://fuyi-atlas.github.io/posts/program/micro-weather/006/" /><meta property="article:section" content="posts" />
+<meta property="article:published_time" content="2023-10-16T21:38:32+08:00" />
+<meta property="article:modified_time" content="2023-10-16T21:38:32+08:00" />
+
+<meta name="twitter:card" content="summary"/>
+<meta name="twitter:title" content="微天气—行政区划数据（二）"/>
+<meta name="twitter:description" content="前言 此前提到微天气应用程序需要使用到行政区划数据，不过上一章所使用的数据来源于网络，或多或少都可以考虑一下是否还有其他获取的方式，所以也就有了本文的内容。
+在这里，将基于全国1:100万基础地理信息数据进行行政区划数据的提取。本文用于记录使用程序实现全国1:100万基础地理信息数据合并的全过程。
+当然，本文产生的最重要原因其实并不是受到微天气的启发，更多的是个人想试一试能不能用。
+数据说明 全国1：100万公众版基础地理信息数据（2021）覆盖全国陆地范围和包括台湾岛、海南岛、钓鱼岛、南海诸岛在内的主要岛屿及其临近海域，共77幅1:100万图幅，该数据集整体现势性为2019年。数据采用2000国家大地坐标系，1985国家高程基准，经纬度坐标。
+为满足广大社会群众对地理信息数据资源的需求，经自然资源部授权，全国地理信息资源目录服务系统提供全国1:100万全图层要素免费下载的服务。下载数据采用1：100万标准图幅分发，内容包括水系、居民地及设施、交通、管线、境界与政区、地貌与土质、植被、地名及注记9个数据集，且保存要素间空间关系和相关属性信息。
+💡 提供下载的是矢量数据，不是最终地图，与符号化后的地图再可视化表达上存在一定差异。用户利用此数据编制地图，应当严格执行《地图管理条例》有关规定；编制的地图如需向社会公开的，还应当依法履行地图审核程序。
+成果规格 分幅编号及范围
+1：100万公众版基础地理信息数据（2021）的图幅总数为77幅，分幅数据按照GB/T 13989-2012《国家基本比例尺地形图分幅和编号》执行。空间存储单元为6°（经差）×4°（纬差）。
+坐标系统
+平面坐标系： 2000国家大地坐标系。 高程基准：1985国家高程基准。 地图投影：分幅数据采用地理坐标，坐标单位为度。 几何精度
+更新后地物点对于附近野外控制点的平面位置和高程中误差符合下表的要求，以两倍中误差值为最大误差。
+地物点误差 最小 最大 平面位置 100 500 高程 50 200 现势性
+1:100万地形数据现势性与更新使用的数据源的现势性一致，数据整体现势性达到2019年。
+成果数据组织 全国1：100万公众版地形数据（2021）内容包括水系、居民地及设施、交通、管线、境界与政区、地貌与土质、植被、地名及注记9个数据集。
+数据分层的命名采用四个字符，第一个字符代表数据分类，第二三个字符是数据内容的缩写，第四个字符代表几何类型。
+目标 实现分图层合并（处理图幅合并时接边问题） 水系（暂缓） 交通（暂缓） 境界与政区（国、省、市、县） 地名及注记 根据合并后的行政区划与地名注记，制作行政区划数据库 数据库使用PostgreSQL（PostGIS） 设计 图层解析程序 Java程序， 使用GDAL 读取GDB
+逻辑 根据《国家基本比例尺地形图分幅和编号》规定可知网格范围，通过网格范围动态生成对应网格的分幅编号，并以该编号进行数据检索。如果命中则根据成果数据组织规格以及相关标准对数据进行解析，如果未命中则跳过，直至网格扫描完毕。
+经度：72~138（E），43~53（11） 纬度：0~56（N），A~N（14） 即，网格范围:[43,53] x [A,N] 数据的处理流程可使用责任链模式进行，后续也方便加入其他的处理流程。即，整体的执行框架为策略模式&#43;责任链模式。为统一策略选择模型，在此提出图层定义（LayerDefinition）的概念。
+LayerDefinition由如下几个关键要素组成：
+图层数据源（LayerSource） driver：驱动，参考java.sql.UnWrapper实现 instance name catalog： schema： table： commonDefinitionKey ：常规定义缓存的key fieldDefinitionKey ：字段定义缓存的key featureCarrierKey ：要素载体缓存的key origin：数据来源（分幅文件路径） scale：比例尺（如：1000000，表示1:1000000） sourceSpatialRef：源坐标系（表现形式可为标准ID、PROJ Text、WKT Text） sinkSpatialRef：目标坐标系（表现形式可为标准ID、PROJ Text、WKT Text） featureCode：要素分类码，对应成果数据组织中的要素分类（如：C、B） name：图层命名，也是图层分类码 layerCode：图层分类码 release：释放格式（比如：WMTS、Shapefile、GDB…） 描述字符为：比例尺:源坐标系:目标坐标系:要素分类码:图层名称:释放格式，在描述字符串中，坐标系仅使用标准ID表示"/>
+
+
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "BreadcrumbList",
+  "itemListElement": [
+    {
+      "@type": "ListItem",
+      "position":  1 ,
+      "name": "Posts",
+      "item": "https://fuyi-atlas.github.io/posts/"
+    }, 
+    {
+      "@type": "ListItem",
+      "position":  2 ,
+      "name": "微天气—行政区划数据（二）",
+      "item": "https://fuyi-atlas.github.io/posts/program/micro-weather/006/"
+    }
+  ]
+}
+</script>
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "BlogPosting",
+  "headline": "微天气—行政区划数据（二）",
+  "name": "微天气—行政区划数据（二）",
+  "description": "前言 此前提到微天气应用程序需要使用到行政区划数据，不过上一章所使用的数据来源于网络，或多或少都可以考虑一下是否还有其他获取的方式，所以也就有了本文的内容。\n在这里，将基于全国1:100万基础地理信息数据进行行政区划数据的提取。本文用于记录使用程序实现全国1:100万基础地理信息数据合并的全过程。\n当然，本文产生的最重要原因其实并不是受到微天气的启发，更多的是个人想试一试能不能用。\n数据说明 全国1：100万公众版基础地理信息数据（2021）覆盖全国陆地范围和包括台湾岛、海南岛、钓鱼岛、南海诸岛在内的主要岛屿及其临近海域，共77幅1:100万图幅，该数据集整体现势性为2019年。数据采用2000国家大地坐标系，1985国家高程基准，经纬度坐标。\n为满足广大社会群众对地理信息数据资源的需求，经自然资源部授权，全国地理信息资源目录服务系统提供全国1:100万全图层要素免费下载的服务。下载数据采用1：100万标准图幅分发，内容包括水系、居民地及设施、交通、管线、境界与政区、地貌与土质、植被、地名及注记9个数据集，且保存要素间空间关系和相关属性信息。\n💡 提供下载的是矢量数据，不是最终地图，与符号化后的地图再可视化表达上存在一定差异。用户利用此数据编制地图，应当严格执行《地图管理条例》有关规定；编制的地图如需向社会公开的，还应当依法履行地图审核程序。\n成果规格 分幅编号及范围\n1：100万公众版基础地理信息数据（2021）的图幅总数为77幅，分幅数据按照GB/T 13989-2012《国家基本比例尺地形图分幅和编号》执行。空间存储单元为6°（经差）×4°（纬差）。\n坐标系统\n平面坐标系： 2000国家大地坐标系。 高程基准：1985国家高程基准。 地图投影：分幅数据采用地理坐标，坐标单位为度。 几何精度\n更新后地物点对于附近野外控制点的平面位置和高程中误差符合下表的要求，以两倍中误差值为最大误差。\n地物点误差 最小 最大 平面位置 100 500 高程 50 200 现势性\n1:100万地形数据现势性与更新使用的数据源的现势性一致，数据整体现势性达到2019年。\n成果数据组织 全国1：100万公众版地形数据（2021）内容包括水系、居民地及设施、交通、管线、境界与政区、地貌与土质、植被、地名及注记9个数据集。\n数据分层的命名采用四个字符，第一个字符代表数据分类，第二三个字符是数据内容的缩写，第四个字符代表几何类型。\n目标 实现分图层合并（处理图幅合并时接边问题） 水系（暂缓） 交通（暂缓） 境界与政区（国、省、市、县） 地名及注记 根据合并后的行政区划与地名注记，制作行政区划数据库 数据库使用PostgreSQL（PostGIS） 设计 图层解析程序 Java程序， 使用GDAL 读取GDB\n逻辑 根据《国家基本比例尺地形图分幅和编号》规定可知网格范围，通过网格范围动态生成对应网格的分幅编号，并以该编号进行数据检索。如果命中则根据成果数据组织规格以及相关标准对数据进行解析，如果未命中则跳过，直至网格扫描完毕。\n经度：72~138（E），43~53（11） 纬度：0~56（N），A~N（14） 即，网格范围:[43,53] x [A,N] 数据的处理流程可使用责任链模式进行，后续也方便加入其他的处理流程。即，整体的执行框架为策略模式+责任链模式。为统一策略选择模型，在此提出图层定义（LayerDefinition）的概念。\nLayerDefinition由如下几个关键要素组成：\n图层数据源（LayerSource） driver：驱动，参考java.sql.UnWrapper实现 instance name catalog： schema： table： commonDefinitionKey ：常规定义缓存的key fieldDefinitionKey ：字段定义缓存的key featureCarrierKey ：要素载体缓存的key origin：数据来源（分幅文件路径） scale：比例尺（如：1000000，表示1:1000000） sourceSpatialRef：源坐标系（表现形式可为标准ID、PROJ Text、WKT Text） sinkSpatialRef：目标坐标系（表现形式可为标准ID、PROJ Text、WKT Text） featureCode：要素分类码，对应成果数据组织中的要素分类（如：C、B） name：图层命名，也是图层分类码 layerCode：图层分类码 release：释放格式（比如：WMTS、Shapefile、GDB…） 描述字符为：比例尺:源坐标系:目标坐标系:要素分类码:图层名称:释放格式，在描述字符串中，坐标系仅使用标准ID表示",
+  "keywords": [
+    "weather"
+  ],
+  "articleBody": "前言 此前提到微天气应用程序需要使用到行政区划数据，不过上一章所使用的数据来源于网络，或多或少都可以考虑一下是否还有其他获取的方式，所以也就有了本文的内容。\n在这里，将基于全国1:100万基础地理信息数据进行行政区划数据的提取。本文用于记录使用程序实现全国1:100万基础地理信息数据合并的全过程。\n当然，本文产生的最重要原因其实并不是受到微天气的启发，更多的是个人想试一试能不能用。\n数据说明 全国1：100万公众版基础地理信息数据（2021）覆盖全国陆地范围和包括台湾岛、海南岛、钓鱼岛、南海诸岛在内的主要岛屿及其临近海域，共77幅1:100万图幅，该数据集整体现势性为2019年。数据采用2000国家大地坐标系，1985国家高程基准，经纬度坐标。\n为满足广大社会群众对地理信息数据资源的需求，经自然资源部授权，全国地理信息资源目录服务系统提供全国1:100万全图层要素免费下载的服务。下载数据采用1：100万标准图幅分发，内容包括水系、居民地及设施、交通、管线、境界与政区、地貌与土质、植被、地名及注记9个数据集，且保存要素间空间关系和相关属性信息。\n💡 提供下载的是矢量数据，不是最终地图，与符号化后的地图再可视化表达上存在一定差异。用户利用此数据编制地图，应当严格执行《地图管理条例》有关规定；编制的地图如需向社会公开的，还应当依法履行地图审核程序。\n成果规格 分幅编号及范围\n1：100万公众版基础地理信息数据（2021）的图幅总数为77幅，分幅数据按照GB/T 13989-2012《国家基本比例尺地形图分幅和编号》执行。空间存储单元为6°（经差）×4°（纬差）。\n坐标系统\n平面坐标系： 2000国家大地坐标系。 高程基准：1985国家高程基准。 地图投影：分幅数据采用地理坐标，坐标单位为度。 几何精度\n更新后地物点对于附近野外控制点的平面位置和高程中误差符合下表的要求，以两倍中误差值为最大误差。\n地物点误差 最小 最大 平面位置 100 500 高程 50 200 现势性\n1:100万地形数据现势性与更新使用的数据源的现势性一致，数据整体现势性达到2019年。\n成果数据组织 全国1：100万公众版地形数据（2021）内容包括水系、居民地及设施、交通、管线、境界与政区、地貌与土质、植被、地名及注记9个数据集。\n数据分层的命名采用四个字符，第一个字符代表数据分类，第二三个字符是数据内容的缩写，第四个字符代表几何类型。\n目标 实现分图层合并（处理图幅合并时接边问题） 水系（暂缓） 交通（暂缓） 境界与政区（国、省、市、县） 地名及注记 根据合并后的行政区划与地名注记，制作行政区划数据库 数据库使用PostgreSQL（PostGIS） 设计 图层解析程序 Java程序， 使用GDAL 读取GDB\n逻辑 根据《国家基本比例尺地形图分幅和编号》规定可知网格范围，通过网格范围动态生成对应网格的分幅编号，并以该编号进行数据检索。如果命中则根据成果数据组织规格以及相关标准对数据进行解析，如果未命中则跳过，直至网格扫描完毕。\n经度：72~138（E），43~53（11） 纬度：0~56（N），A~N（14） 即，网格范围:[43,53] x [A,N] 数据的处理流程可使用责任链模式进行，后续也方便加入其他的处理流程。即，整体的执行框架为策略模式+责任链模式。为统一策略选择模型，在此提出图层定义（LayerDefinition）的概念。\nLayerDefinition由如下几个关键要素组成：\n图层数据源（LayerSource） driver：驱动，参考java.sql.UnWrapper实现 instance name catalog： schema： table： commonDefinitionKey ：常规定义缓存的key fieldDefinitionKey ：字段定义缓存的key featureCarrierKey ：要素载体缓存的key origin：数据来源（分幅文件路径） scale：比例尺（如：1000000，表示1:1000000） sourceSpatialRef：源坐标系（表现形式可为标准ID、PROJ Text、WKT Text） sinkSpatialRef：目标坐标系（表现形式可为标准ID、PROJ Text、WKT Text） featureCode：要素分类码，对应成果数据组织中的要素分类（如：C、B） name：图层命名，也是图层分类码 layerCode：图层分类码 release：释放格式（比如：WMTS、Shapefile、GDB…） 描述字符为：比例尺:源坐标系:目标坐标系:要素分类码:图层名称:释放格式，在描述字符串中，坐标系仅使用标准ID表示\n💡 源坐标系、要素分类码、图层名称均来自于源数据。当且仅当原始数据中无法获取到源坐标系定义时，源坐标系定义可来自于配置。\n基本流程 扫描网格定义（可配置）\nGDB读取（支持zip，并推荐使用zip）\n/home/fuyi/GeoDatabase/China_Basic_1-100/J50.gdb /home/fuyi/GeoDatabase/China_Basic_1-100/J50.gdb.zip 策略管理器（StrategyManager），职责：根据配置选择具体策略方案，并调用执行\n策略（Strategy），持有相应的处理器对象，责任链由此开始启动\n总体上分为三个阶段\n1、图层归一（数据、位置、坐标系） 2、图层合并 3、图层释放（service、dump、nothing） Layer normalization (data, location, coordinate system) Layer merging Layer release (service, dump, nothing) 归一化处理阶段（应保证空间参考归一、图层数据存储归一，即应保持整体一致） 合并处理阶段（或者称之为中间处理阶段，在这里不仅可以处理合并，还可以做其他的事情） 释放阶段（数据的处理总归是有目的存在的，那么本阶段就是确定数据最终存在或服务的形式，比如导出为Shapefile文件、写入PostGIS数据库或通过WMTS服务对外提供数据访问等） GDAL策略：默认策略，即全程基本上使用GDAL处理\n匹配获取指定图层处理器（归一化），职责为：解析\n先写缓存（redis）\nsupport（根据图层命名），如：boua，该值作为处理器的判断条件 可提供转换处理器，职责为：坐标系转换\n坐标系转换既可以在归一化处理阶段进行（保证不同空间参考的数据转入同一空间参考），也可以在中间处理阶段（统一进行数据转换）或是释放阶段（根据释放需求进行处理）\n提供数据合并处理器，职责为：跨图幅的图层合并\n处理逻辑，根据给定的关联列进行空间对象合并（如：在行政境界中使用行政区划编码以及名称进行空间合并）\n不同图层可以具有不同的合并规则，由不同的实例进行提供对应的合并行为\n释放逻辑也通过定义格式处理器完成处理，职责：格式处理\n需指明格式与比例尺 support，根据格式与比例尺，如：postgis:1000000，该值作为处理器的判断条件 不同比例尺创建不同的存储名称。如，存储格式为PostGIS：\n表命名规则：图层名称_比例尺，小写\n如：boua_1000000，意为1：1000000比例尺下boua数据层数据\n💡 LayerDefine结构可作为所有策略选择的入参，内部则根据自己依赖的条件进行决策。\nDriver(register) → GDALDriverManager → DataSet → Layer → Feature → Geometry\nRedis缓存作为转换过程中的数据存储与交换容器\n图层定义拆分为两个部分进行存储，常规内容使用hash结构存储，便于进行变更 prefix key : feature code : layer code : definition\nscale sourceSpatialRef sinkSpatialRef storage 属性定义使用set结构存储，便于序列化与反序列化\nprefix key : feature code : layer code : definition : fields\nfieldDefinitions 图层数据则使用list数据结构进行储存，便于序列化与反序列化，同时便于数据追加 prefix key : feature code : layer code : features\nfeatures 结构拆解图 开发 环境准备 操作系统：Debian 11 bookworm（testing） IDE：IntelliJ IDEA 2022.1.4 (Community Edition) PostgreSQL：14（13+即可） JDK：openjdk version “11” 2018-09-25 Maven：Apache Maven 3.8.6 GDAL：GDAL 3.5.1, released 2022/06/30 GDAL环境准备 debian 11 testing，自行编译gdal程序\n/debian 11 testing，已经自行安装了gdal程序，但是没有java binding模块，所以还是需要自行编译。\n我今天用的是Fedora 38 workstation，可以直接 install gdal, gdal-java，而后将libgdalalljni.so文件拷贝到/usr/java/packages/lib 目录下（如果不存在，请自行创建）\nsudo mkdir -p /usr/java/packages/lib \u0026 sudo ln -s /usr/lib/java/gdal/libgdalalljni.so /usr/java/packages/lib/libgdalalljni.so\n@time: 2023.10.08\n异常 下图是经过pac,name合并后的数据（并去除了境外与海洋数据），如图可见，仍然存在些许裂缝\n经过排查发现，发现部分原始图副之间便存在裂缝，且该裂缝的两边不一定是平行的。那么这就会导致合并出现两种情况\n待合并的多边形之间存在裂缝，且多边形互相不相交\n也就是隔海相望的那一种，此种情况是可以通过后续手段修复的，不过也是只有在裂缝的定义存在于合并后的多边形中（只不过可能被定义为洞）的情况下，如果不在的话，也不知道应该如何出来\n待合并的多边形之间存在裂缝，且多边形存在相交，并且交点在裂缝之上\n这种形式便不知道应该怎么处理了。\n💡 感觉本质上，是一个找到裂缝的过程，并将裂缝作为内容的一部分进行合并。但是如何确定裂缝的范围也是不容易的，这可能和多边形间相互位置关系有关系\n成果 归一化 即将分离的图幅数据提取到统一位置存放，坐标本来就是统一的，不需要额外操作\n去除无效区域与数据 去除境外数据（pac \u003c 100000） 去除海域面数据（pac = 250100） 去除空间无效数据（ST_IsValid(geometry)==false） 合并处理 即进行图幅合并（使用pac与name）\n💡 从此处可以发现，部分区域存在裂缝。 1、pac=632722\n2、pac=140404\n3、pac=140427\n4、pac=520625\n5、pac=520628\n我同时对比了QGIS、ArcGIS中提供的Dissolve工具的融合效果（使用pac与name），就都存在裂缝情况上： 合并后的数量都是：2900\narcgis 优于 wukong 优于 qgis\nArcGIS QGIS WuKong Source Code wukong-github\n小结 因做境界合并，开发了WuKong程序，但是其含义并不仅仅只是进行境界合并，他是一个基于国家开放的基础地理信息数据的（目前是基于1：100玩基础地理信息数据），可以进行归一、转换、释放的通用程序。\n虽然目前仅完成了基础境界的合并（且存在瑕疵，但好歹也和QGIS的实现差不多不是），但这仅仅只是开始，还有更多的内容可以实现。\n参考 全国地理信息资源目录服务系统（https://www.webmap.cn/） 数据来源于全国地理信息资源目录服务系统：www.webmap.cn\nGB/T 13989-2012 国家基本比例尺地形图分幅和编号 1：1000000地形图的分幅 经度：72~138（E），43~53（11）\n纬度：0~56（N），A~N（14）\nGB/T 33183-2016 基础地理信息 1:50 000地形要素数据规范 1:50000地形要素属性表结构 境界与政区 地名 1:50000地形要素数据要素内容与选取指标 走天涯徐小洋公众号 2021版国家基础地理数据库批量下载与拼接方法\n【资源分享】如何查找靠谱的国标，全文免费看！全文免费看！全文免费看！\n1：100万基础地理数据库怎么看？怎么用？能干嘛？\nGDAL vector-openfilegdb Vector Data Model - GDAL documentation\nESRI File Geodatabase (OpenFileGDB) - GDAL documentation\nJava bindings - GDAL documentation\nOverview (GDAL/OGR 3.5.0 Java bindings API)\nOther https://github.com/modood/Administrative-divisions-of-China\nST_Centroid\nConda Conda - Conda documentation\nconda的安装与使用 2.0版（2022-08-12更新）\n",
+  "wordCount" : "334",
+  "inLanguage": "en",
+  "datePublished": "2023-10-16T21:38:32+08:00",
+  "dateModified": "2023-10-16T21:38:32+08:00",
+  "author":{
+    "@type": "Person",
+    "name": "Fuyi"
+  },
+  "mainEntityOfPage": {
+    "@type": "WebPage",
+    "@id": "https://fuyi-atlas.github.io/posts/program/micro-weather/006/"
+  },
+  "publisher": {
+    "@type": "Organization",
+    "name": "Fuyi Atlas",
+    "logo": {
+      "@type": "ImageObject",
+      "url": "https://fuyi-atlas.github.io/favicon.ico"
+    }
+  }
+}
+</script>
+</head>
+
+<body class="" id="top">
+<script>
+    if (localStorage.getItem("pref-theme") === "dark") {
+        document.body.classList.add('dark');
+    } else if (localStorage.getItem("pref-theme") === "light") {
+        document.body.classList.remove('dark')
+    } else if (window.matchMedia('(prefers-color-scheme: dark)').matches) {
+        document.body.classList.add('dark');
+    }
+
+</script>
+
+<header class="header">
+    <nav class="nav">
+        <div class="logo">
+            <a href="https://fuyi-atlas.github.io/" accesskey="h" title="Fuyi Atlas (Alt + H)">Fuyi Atlas</a>
+            <div class="logo-switches">
+                <button id="theme-toggle" accesskey="t" title="(Alt + T)">
+                    <svg id="moon" xmlns="http://www.w3.org/2000/svg" width="24" height="18" viewBox="0 0 24 24"
+                        fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"
+                        stroke-linejoin="round">
+                        <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path>
+                    </svg>
+                    <svg id="sun" xmlns="http://www.w3.org/2000/svg" width="24" height="18" viewBox="0 0 24 24"
+                        fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"
+                        stroke-linejoin="round">
+                        <circle cx="12" cy="12" r="5"></circle>
+                        <line x1="12" y1="1" x2="12" y2="3"></line>
+                        <line x1="12" y1="21" x2="12" y2="23"></line>
+                        <line x1="4.22" y1="4.22" x2="5.64" y2="5.64"></line>
+                        <line x1="18.36" y1="18.36" x2="19.78" y2="19.78"></line>
+                        <line x1="1" y1="12" x2="3" y2="12"></line>
+                        <line x1="21" y1="12" x2="23" y2="12"></line>
+                        <line x1="4.22" y1="19.78" x2="5.64" y2="18.36"></line>
+                        <line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line>
+                    </svg>
+                </button>
+                <ul class="lang-switch"><li>|</li>
+                    <li>
+                        <a href="https://fuyi-atlas.github.io/zh/" title="Chinese"
+                            aria-label="Chinese">Zh</a>
+                    </li>
+                </ul>
+            </div>
+        </div>
+        <ul id="menu">
+            <li>
+                <a href="https://fuyi-atlas.github.io/archives/" title="Archive">
+                    <span>Archive</span>
+                </a>
+            </li>
+            <li>
+                <a href="https://fuyi-atlas.github.io/search/" title="Search (Alt &#43; /)" accesskey=/>
+                    <span>Search</span>
+                </a>
+            </li>
+            <li>
+                <a href="https://fuyi-atlas.github.io/categories/" title="Categories">
+                    <span>Categories</span>
+                </a>
+            </li>
+            <li>
+                <a href="https://fuyi-atlas.github.io/tags/" title="Tags">
+                    <span>Tags</span>
+                </a>
+            </li>
+        </ul>
+    </nav>
+</header>
+<main class="main">
+
+<article class="post-single">
+  <header class="post-header">
+    <div class="breadcrumbs"><a href="https://fuyi-atlas.github.io/">Home</a>&nbsp;»&nbsp;<a href="https://fuyi-atlas.github.io/posts/">Posts</a></div>
+    <h1 class="post-title entry-hint-parent">
+      微天气—行政区划数据（二）
+    </h1>
+    <div class="post-meta"><span title='2023-10-16 21:38:32 +0800 CST'>October 16, 2023</span>&nbsp;·&nbsp;2 min&nbsp;·&nbsp;Fuyi
+
+</div>
+  </header> <div class="toc">
+    <details >
+        <summary accesskey="c" title="(Alt + C)">
+            <span class="details">Table of Contents</span>
+        </summary>
+
+        <div class="inner"><ul>
+                <li>
+                    <a href="#%e5%89%8d%e8%a8%80" aria-label="前言">前言</a></li>
+                <li>
+                    <a href="#%e6%95%b0%e6%8d%ae%e8%af%b4%e6%98%8e" aria-label="数据说明">数据说明</a><ul>
+                        
+                <li>
+                    <a href="#%e6%88%90%e6%9e%9c%e8%a7%84%e6%a0%bc" aria-label="成果规格">成果规格</a></li>
+                <li>
+                    <a href="#%e6%88%90%e6%9e%9c%e6%95%b0%e6%8d%ae%e7%bb%84%e7%bb%87" aria-label="成果数据组织">成果数据组织</a></li></ul>
+                </li>
+                <li>
+                    <a href="#%e7%9b%ae%e6%a0%87" aria-label="目标">目标</a></li>
+                <li>
+                    <a href="#%e8%ae%be%e8%ae%a1" aria-label="设计">设计</a><ul>
+                        
+                <li>
+                    <a href="#%e5%9b%be%e5%b1%82%e8%a7%a3%e6%9e%90%e7%a8%8b%e5%ba%8f" aria-label="图层解析程序">图层解析程序</a><ul>
+                        
+                <li>
+                    <a href="#%e9%80%bb%e8%be%91" aria-label="逻辑">逻辑</a></li>
+                <li>
+                    <a href="#%e5%9f%ba%e6%9c%ac%e6%b5%81%e7%a8%8b" aria-label="基本流程">基本流程</a></li>
+                <li>
+                    <a href="#%e7%bb%93%e6%9e%84%e6%8b%86%e8%a7%a3%e5%9b%be" aria-label="结构拆解图">结构拆解图</a></li></ul>
+                </li></ul>
+                </li>
+                <li>
+                    <a href="#%e5%bc%80%e5%8f%91" aria-label="开发">开发</a><ul>
+                        
+                <li>
+                    <a href="#%e7%8e%af%e5%a2%83%e5%87%86%e5%a4%87" aria-label="环境准备">环境准备</a><ul>
+                        
+                <li>
+                    <a href="#gdal%e7%8e%af%e5%a2%83%e5%87%86%e5%a4%87" aria-label="GDAL环境准备">GDAL环境准备</a></li></ul>
+                </li>
+                <li>
+                    <a href="#%e5%bc%82%e5%b8%b8" aria-label="异常">异常</a></li></ul>
+                </li>
+                <li>
+                    <a href="#%e6%88%90%e6%9e%9c" aria-label="成果">成果</a><ul>
+                        
+                <li>
+                    <a href="#%e5%bd%92%e4%b8%80%e5%8c%96" aria-label="归一化">归一化</a></li>
+                <li>
+                    <a href="#%e5%8e%bb%e9%99%a4%e6%97%a0%e6%95%88%e5%8c%ba%e5%9f%9f%e4%b8%8e%e6%95%b0%e6%8d%ae" aria-label="去除无效区域与数据">去除无效区域与数据</a></li>
+                <li>
+                    <a href="#%e5%90%88%e5%b9%b6%e5%a4%84%e7%90%86" aria-label="合并处理">合并处理</a><ul>
+                        
+                <li>
+                    <a href="#arcgis" aria-label="ArcGIS">ArcGIS</a></li>
+                <li>
+                    <a href="#qgis" aria-label="QGIS">QGIS</a></li>
+                <li>
+                    <a href="#wukong" aria-label="WuKong">WuKong</a></li></ul>
+                </li>
+                <li>
+                    <a href="#source-code" aria-label="Source Code">Source Code</a></li>
+                <li>
+                    <a href="#%e5%b0%8f%e7%bb%93" aria-label="小结">小结</a></li></ul>
+                </li>
+                <li>
+                    <a href="#%e5%8f%82%e8%80%83" aria-label="参考">参考</a><ul>
+                        
+                <li>
+                    <a href="#%e5%85%a8%e5%9b%bd%e5%9c%b0%e7%90%86%e4%bf%a1%e6%81%af%e8%b5%84%e6%ba%90%e7%9b%ae%e5%bd%95%e6%9c%8d%e5%8a%a1%e7%b3%bb%e7%bb%9fhttpswwwwebmapcnhttpswwwwebmapcn" aria-label="全国地理信息资源目录服务系统（https://www.webmap.cn/）">全国地理信息资源目录服务系统（https://www.webmap.cn/）</a></li>
+                <li>
+                    <a href="#gbt-13989-2012-%e5%9b%bd%e5%ae%b6%e5%9f%ba%e6%9c%ac%e6%af%94%e4%be%8b%e5%b0%ba%e5%9c%b0%e5%bd%a2%e5%9b%be%e5%88%86%e5%b9%85%e5%92%8c%e7%bc%96%e5%8f%b7httpcgb688cnbzgkgbshowgbtypeonlinehcno30799a9af9bfa98e77d21abc5f0984e2" aria-label="GB/T 13989-2012 国家基本比例尺地形图分幅和编号">GB/T 13989-2012 国家基本比例尺地形图分幅和编号</a><ul>
+                        
+                <li>
+                    <a href="#11000000%e5%9c%b0%e5%bd%a2%e5%9b%be%e7%9a%84%e5%88%86%e5%b9%85" aria-label="1：1000000地形图的分幅">1：1000000地形图的分幅</a></li></ul>
+                </li>
+                <li>
+                    <a href="#gbt-33183-2016-%e5%9f%ba%e7%a1%80%e5%9c%b0%e7%90%86%e4%bf%a1%e6%81%af-150-000%e5%9c%b0%e5%bd%a2%e8%a6%81%e7%b4%a0%e6%95%b0%e6%8d%ae%e8%a7%84%e8%8c%83httpsopenstdsamrgovcnbzgkgbnewgbinfohcno95caa9d86228b35440b422107ddf4fac" aria-label="GB/T 33183-2016 基础地理信息 1:50 000地形要素数据规范">GB/T 33183-2016 基础地理信息 1:50 000地形要素数据规范</a><ul>
+                        
+                <li>
+                    <a href="#150000%e5%9c%b0%e5%bd%a2%e8%a6%81%e7%b4%a0%e5%b1%9e%e6%80%a7%e8%a1%a8%e7%bb%93%e6%9e%84" aria-label="1:50000地形要素属性表结构">1:50000地形要素属性表结构</a></li>
+                <li>
+                    <a href="#150000%e5%9c%b0%e5%bd%a2%e8%a6%81%e7%b4%a0%e6%95%b0%e6%8d%ae%e8%a6%81%e7%b4%a0%e5%86%85%e5%ae%b9%e4%b8%8e%e9%80%89%e5%8f%96%e6%8c%87%e6%a0%87" aria-label="1:50000地形要素数据要素内容与选取指标">1:50000地形要素数据要素内容与选取指标</a></li></ul>
+                </li>
+                <li>
+                    <a href="#%e8%b5%b0%e5%a4%a9%e6%b6%af%e5%be%90%e5%b0%8f%e6%b4%8b%e5%85%ac%e4%bc%97%e5%8f%b7" aria-label="走天涯徐小洋公众号">走天涯徐小洋公众号</a></li>
+                <li>
+                    <a href="#gdal" aria-label="GDAL">GDAL</a><ul>
+                        
+                <li>
+                    <a href="#vector-openfilegdb" aria-label="vector-openfilegdb">vector-openfilegdb</a></li></ul>
+                </li>
+                <li>
+                    <a href="#other" aria-label="Other">Other</a></li>
+                <li>
+                    <a href="#conda" aria-label="Conda">Conda</a>
+                </li>
+            </ul>
+            </li>
+            </ul>
+        </div>
+    </details>
+</div>
+
+  <div class="post-content"><h2 id="前言">前言<a hidden class="anchor" aria-hidden="true" href="#前言">#</a></h2>
+<p>此前提到微天气应用程序需要使用到行政区划数据，不过上一章所使用的数据来源于网络，或多或少都可以考虑一下是否还有其他获取的方式，所以也就有了本文的内容。</p>
+<p>在这里，将基于全国1:100万基础地理信息数据进行行政区划数据的提取。本文用于记录使用程序实现全国1:100万基础地理信息数据合并的全过程。</p>
+<blockquote>
+<p>当然，本文产生的最重要原因其实并不是受到微天气的启发，更多的是个人想试一试能不能用。</p>
+</blockquote>
+<h2 id="数据说明">数据说明<a hidden class="anchor" aria-hidden="true" href="#数据说明">#</a></h2>
+<p>全国1：100万公众版基础地理信息数据（2021）覆盖全国陆地范围和包括台湾岛、海南岛、钓鱼岛、南海诸岛在内的主要岛屿及其临近海域，共77幅1:100万图幅，该数据集整体现势性为2019年。数据采用2000国家大地坐标系，1985国家高程基准，经纬度坐标。</p>
+<p>为满足广大社会群众对地理信息数据资源的需求，经自然资源部授权，全国地理信息资源目录服务系统提供全国1:100万全图层要素免费下载的服务。下载数据采用1：100万标准图幅分发，内容包括水系、居民地及设施、交通、管线、境界与政区、地貌与土质、植被、地名及注记9个数据集，且保存要素间空间关系和相关属性信息。</p>
+<blockquote>
+<p>💡 <strong><font color="FF0000">提供下载的是矢量数据，不是最终地图，与符号化后的地图再可视化表达上存在一定差异。用户利用此数据编制地图，应当严格执行《地图管理条例》有关规定；编制的地图如需向社会公开的，还应当依法履行地图审核程序。</strong></font></p>
+</blockquote>
+<h3 id="成果规格">成果规格<a hidden class="anchor" aria-hidden="true" href="#成果规格">#</a></h3>
+<ul>
+<li>
+<p>分幅编号及范围</p>
+<p>1：100万公众版基础地理信息数据（2021）的图幅总数为77幅，分幅数据按照GB/T 13989-2012《国家基本比例尺地形图分幅和编号》执行。空间存储单元为6°（经差）×4°（纬差）。</p>
+</li>
+<li>
+<p>坐标系统</p>
+<ul>
+<li>平面坐标系： 2000国家大地坐标系。</li>
+<li>高程基准：1985国家高程基准。</li>
+<li>地图投影：分幅数据采用地理坐标，坐标单位为度。</li>
+</ul>
+</li>
+<li>
+<p>几何精度</p>
+<p>更新后地物点对于附近野外控制点的平面位置和高程中误差符合下表的要求，以两倍中误差值为最大误差。</p>
+<table>
+<thead>
+<tr>
+<th>地物点误差</th>
+<th>最小</th>
+<th>最大</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>平面位置</td>
+<td>100</td>
+<td>500</td>
+</tr>
+<tr>
+<td>高程</td>
+<td>50</td>
+<td>200</td>
+</tr>
+</tbody>
+</table>
+</li>
+<li>
+<p>现势性</p>
+<p>1:100万地形数据现势性与更新使用的数据源的现势性一致，数据整体现势性达到2019年。</p>
+</li>
+</ul>
+<h3 id="成果数据组织"><strong>成果数据组织</strong><a hidden class="anchor" aria-hidden="true" href="#成果数据组织">#</a></h3>
+<p>全国1：100万公众版地形数据（2021）内容包括水系、居民地及设施、交通、管线、境界与政区、地貌与土质、植被、地名及注记9个数据集。</p>
+<p>数据分层的命名采用四个字符，第一个字符代表数据分类，第二三个字符是数据内容的缩写，第四个字符代表几何类型。</p>
+<p><img loading="lazy" src="https://zhou-fuyi.github.io/picx-images-hosting/202310092210356.1aoqvla971.webp" alt="数据分层"  />
+</p>
+<h2 id="目标">目标<a hidden class="anchor" aria-hidden="true" href="#目标">#</a></h2>
+<ul>
+<li><input disabled="" type="checkbox"> 实现分图层合并（处理图幅合并时接边问题）
+<ul>
+<li><input disabled="" type="checkbox"> 水系（暂缓）</li>
+<li><input disabled="" type="checkbox"> 交通（暂缓）</li>
+<li><input checked="" disabled="" type="checkbox"> 境界与政区（国、省、市、县）</li>
+<li><input disabled="" type="checkbox"> 地名及注记</li>
+</ul>
+</li>
+<li><input checked="" disabled="" type="checkbox"> 根据合并后的行政区划与地名注记，制作行政区划数据库</li>
+<li><input checked="" disabled="" type="checkbox"> 数据库使用PostgreSQL（PostGIS）</li>
+</ul>
+<h2 id="设计">设计<a hidden class="anchor" aria-hidden="true" href="#设计">#</a></h2>
+<h3 id="图层解析程序">图层解析程序<a hidden class="anchor" aria-hidden="true" href="#图层解析程序">#</a></h3>
+<p>Java程序， 使用GDAL 读取GDB</p>
+<h4 id="逻辑">逻辑<a hidden class="anchor" aria-hidden="true" href="#逻辑">#</a></h4>
+<p>根据《国家基本比例尺地形图分幅和编号》规定可知网格范围，通过网格范围动态生成对应网格的分幅编号，并以该编号进行数据检索。如果命中则根据成果数据组织规格以及相关标准对数据进行解析，如果未命中则跳过，直至网格扫描完毕。</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-fallback" data-lang="fallback"><span class="line"><span class="cl">经度：72~138（E），43~53（11）
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">纬度：0~56（N），A~N（14）
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">即，网格范围:[43,53] x [A,N]
+</span></span></code></pre></div><p>数据的处理流程可使用责任链模式进行，后续也方便加入其他的处理流程。即，整体的执行框架为策略模式+责任链模式。为统一策略选择模型，在此提出图层定义（LayerDefinition）的概念。</p>
+<p>LayerDefinition由如下几个关键要素组成：</p>
+<ul>
+<li>图层数据源（LayerSource）
+<ul>
+<li>driver：驱动，参考java.sql.UnWrapper实现
+<ul>
+<li>instance</li>
+<li>name</li>
+</ul>
+</li>
+<li>catalog：</li>
+<li>schema：</li>
+<li>table：</li>
+<li><code>commonDefinitionKey</code> ：常规定义缓存的key</li>
+<li><code>fieldDefinitionKey</code> ：字段定义缓存的key</li>
+<li><code>featureCarrierKey</code> ：要素载体缓存的key</li>
+</ul>
+</li>
+<li>origin：数据来源（分幅文件路径）</li>
+<li>scale：比例尺（如：1000000，表示1:1000000）</li>
+<li><code>sourceSpatialRef</code>：源坐标系（表现形式可为标准ID、PROJ Text、WKT Text）</li>
+<li><code>sinkSpatialRef</code>：目标坐标系（表现形式可为标准ID、PROJ Text、WKT Text）</li>
+<li><code>featureCode</code>：要素分类码，对应成果数据组织中的要素分类（如：C、B）</li>
+<li>name：图层命名，也是图层分类码</li>
+<li>layerCode：图层分类码</li>
+<li>release：释放格式（比如：WMTS、Shapefile、GDB…）</li>
+</ul>
+<p>描述字符为：比例尺:源坐标系:目标坐标系:要素分类码:图层名称:释放格式，在描述字符串中，坐标系仅使用标准ID表示</p>
+<blockquote>
+<p>💡 源坐标系、要素分类码、图层名称均来自于源数据。当且仅当原始数据中无法获取到源坐标系定义时，源坐标系定义可来自于配置。</p>
+</blockquote>
+<h4 id="基本流程">基本流程<a hidden class="anchor" aria-hidden="true" href="#基本流程">#</a></h4>
+<ol>
+<li>
+<p>扫描网格定义（可配置）</p>
+</li>
+<li>
+<p>GDB读取（支持zip，并推荐使用zip）</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-fallback" data-lang="fallback"><span class="line"><span class="cl">/home/fuyi/GeoDatabase/China_Basic_1-100/J50.gdb
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">/home/fuyi/GeoDatabase/China_Basic_1-100/J50.gdb.zip
+</span></span></code></pre></div></li>
+<li>
+<p>策略管理器（StrategyManager），职责：根据配置选择具体策略方案，并调用执行</p>
+<p>策略（Strategy），持有相应的处理器对象，责任链由此开始启动</p>
+<p>总体上分为三个阶段</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-fallback" data-lang="fallback"><span class="line"><span class="cl">1、图层归一（数据、位置、坐标系）
+</span></span><span class="line"><span class="cl">2、图层合并
+</span></span><span class="line"><span class="cl">3、图层释放（service、dump、nothing）
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">Layer normalization (data, location, coordinate system)
+</span></span><span class="line"><span class="cl">Layer merging
+</span></span><span class="line"><span class="cl">Layer release (service, dump, nothing)
+</span></span></code></pre></div><ul>
+<li>归一化处理阶段（应保证空间参考归一、图层数据存储归一，即应保持整体一致）</li>
+<li>合并处理阶段（或者称之为中间处理阶段，在这里不仅可以处理合并，还可以做其他的事情）</li>
+<li>释放阶段（数据的处理总归是有目的存在的，那么本阶段就是确定数据最终存在或服务的形式，比如导出为Shapefile文件、写入PostGIS数据库或通过WMTS服务对外提供数据访问等）</li>
+</ul>
+<p>GDAL策略：默认策略，即全程基本上使用GDAL处理</p>
+</li>
+<li>
+<p>匹配获取指定图层处理器（归一化），职责为：解析</p>
+<p>先写缓存（redis）</p>
+<ol>
+<li>support（根据图层命名），如：<code>boua</code>，该值作为处理器的判断条件</li>
+</ol>
+</li>
+<li>
+<p>可提供转换处理器，职责为：坐标系转换</p>
+<p>坐标系转换既可以在归一化处理阶段进行（保证不同空间参考的数据转入同一空间参考），也可以在中间处理阶段（统一进行数据转换）或是释放阶段（根据释放需求进行处理）</p>
+</li>
+<li>
+<p>提供数据合并处理器，职责为：跨图幅的图层合并</p>
+<p>处理逻辑，根据给定的关联列进行空间对象合并（如：在行政境界中使用行政区划编码以及名称进行空间合并）</p>
+<p>不同图层可以具有不同的合并规则，由不同的实例进行提供对应的合并行为</p>
+</li>
+<li>
+<p>释放逻辑也通过定义格式处理器完成处理，职责：格式处理</p>
+<ol>
+<li>需指明格式与比例尺</li>
+<li>support，根据格式与比例尺，如：<code>postgis:1000000</code>，该值作为处理器的判断条件</li>
+</ol>
+</li>
+<li>
+<p>不同比例尺创建不同的存储名称。如，存储格式为PostGIS：</p>
+<p>表命名规则：图层名称_比例尺，小写</p>
+<p>如：<code>boua_1000000</code>，意为1：1000000比例尺下boua数据层数据</p>
+</li>
+</ol>
+<blockquote>
+<p>💡 LayerDefine结构可作为所有策略选择的入参，内部则根据自己依赖的条件进行决策。</p>
+<p>Driver(register) → GDALDriverManager → DataSet → Layer → Feature → Geometry</p>
+<p><code>Redis</code>缓存作为转换过程中的数据存储与交换容器</p>
+<p>图层定义拆分为两个部分进行存储，常规内容使用hash结构存储，便于进行变更
+prefix key : feature code : layer code : definition</p>
+<ul>
+<li><code>scale</code></li>
+<li><code>sourceSpatialRef</code></li>
+<li><code>sinkSpatialRef</code></li>
+<li><code>storage</code></li>
+</ul>
+<p>属性定义使用set结构存储，便于序列化与反序列化</p>
+<p>prefix key : feature code : layer code : definition : fields</p>
+<ul>
+<li><code>fieldDefinitions</code></li>
+</ul>
+<p>图层数据则使用list数据结构进行储存，便于序列化与反序列化，同时便于数据追加
+prefix key : feature code : layer code : features</p>
+<ul>
+<li><code>features</code></li>
+</ul>
+</blockquote>
+<h4 id="结构拆解图">结构拆解图<a hidden class="anchor" aria-hidden="true" href="#结构拆解图">#</a></h4>
+<p><img loading="lazy" src="https://zhou-fuyi.github.io/picx-images-hosting/202310092222086.4xuaj4ohrv.webp" alt="202310092222086"  />
+</p>
+<h2 id="开发">开发<a hidden class="anchor" aria-hidden="true" href="#开发">#</a></h2>
+<h3 id="环境准备">环境准备<a hidden class="anchor" aria-hidden="true" href="#环境准备">#</a></h3>
+<ul>
+<li>操作系统：Debian 11 bookworm（testing）</li>
+<li>IDE：IntelliJ IDEA 2022.1.4 (Community Edition)</li>
+<li>PostgreSQL：14（13+即可）</li>
+<li>JDK：openjdk version &ldquo;11&rdquo; 2018-09-25</li>
+<li>Maven：Apache Maven 3.8.6</li>
+<li>GDAL：GDAL 3.5.1, released 2022/06/30</li>
+</ul>
+<h4 id="gdal环境准备">GDAL环境准备<a hidden class="anchor" aria-hidden="true" href="#gdal环境准备">#</a></h4>
+<p>debian 11 testing，自行编译gdal程序</p>
+<p>/debian 11 testing，已经自行安装了gdal程序，但是没有java binding模块，所以还是需要自行编译。</p>
+<blockquote>
+<p>我今天用的是Fedora 38 workstation，可以直接 install gdal, gdal-java，而后将libgdalalljni.so文件拷贝到/usr/java/packages/lib 目录下（如果不存在，请自行创建）</p>
+<p>sudo mkdir -p /usr/java/packages/lib &amp; sudo ln -s /usr/lib/java/gdal/libgdalalljni.so /usr/java/packages/lib/libgdalalljni.so</p>
+<p>@time: 2023.10.08</p>
+</blockquote>
+<h3 id="异常">异常<a hidden class="anchor" aria-hidden="true" href="#异常">#</a></h3>
+<p>下图是经过pac,name合并后的数据（并去除了境外与海洋数据），如图可见，仍然存在些许裂缝</p>
+<p><img loading="lazy" src="https://zhou-fuyi.github.io/picx-images-hosting/202310092229437.6pn9e17uo0.webp" alt="202310092229437"  />
+</p>
+<p>经过排查发现，发现部分原始图副之间便存在裂缝，且该裂缝的两边不一定是平行的。那么这就会导致合并出现两种情况</p>
+<ol>
+<li>
+<p>待合并的多边形之间存在裂缝，且多边形互相不相交</p>
+<p>也就是隔海相望的那一种，此种情况是可以通过后续手段修复的，不过也是只有在裂缝的定义存在于合并后的多边形中（只不过可能被定义为洞）的情况下，如果不在的话，也不知道应该如何出来</p>
+</li>
+<li>
+<p>待合并的多边形之间存在裂缝，且多边形存在相交，并且交点在裂缝之上</p>
+<p>这种形式便不知道应该怎么处理了。</p>
+</li>
+</ol>
+<blockquote>
+<p>💡 感觉本质上，是一个找到裂缝的过程，并将裂缝作为内容的一部分进行合并。但是如何确定裂缝的范围也是不容易的，这可能和多边形间相互位置关系有关系</p>
+</blockquote>
+<h2 id="成果">成果<a hidden class="anchor" aria-hidden="true" href="#成果">#</a></h2>
+<h3 id="归一化">归一化<a hidden class="anchor" aria-hidden="true" href="#归一化">#</a></h3>
+<p>即将分离的图幅数据提取到统一位置存放，坐标本来就是统一的，不需要额外操作</p>
+<p><img loading="lazy" src="https://zhou-fuyi.github.io/picx-images-hosting/202310092231964.5mnk35c0sk.webp" alt="202310092231964"  />
+</p>
+<h3 id="去除无效区域与数据">去除无效区域与数据<a hidden class="anchor" aria-hidden="true" href="#去除无效区域与数据">#</a></h3>
+<ul>
+<li>去除境外数据（pac &lt; 100000）</li>
+<li>去除海域面数据（pac = 250100）</li>
+<li>去除空间无效数据（<code>ST_IsValid(geometry)==false</code>）</li>
+</ul>
+<p><img loading="lazy" src="https://zhou-fuyi.github.io/picx-images-hosting/202310092232208.1lbkor7xfu.webp" alt="202310092232208"  />
+</p>
+<h3 id="合并处理">合并处理<a hidden class="anchor" aria-hidden="true" href="#合并处理">#</a></h3>
+<p>即进行图幅合并（使用pac与name）</p>
+<p><img loading="lazy" src="https://zhou-fuyi.github.io/picx-images-hosting/202310092237845.1ov6mh105s.webp" alt="202310092237845"  />
+</p>
+<p><img loading="lazy" src="https://zhou-fuyi.github.io/picx-images-hosting/202310092314308.101x2gdh6r.webp" alt="202310092314308"  />
+</p>
+<blockquote>
+<p>💡 从此处可以发现，部分区域存在裂缝。 <br>
+1、pac=632722<br>
+2、pac=140404<br>
+3、pac=140427<br>
+4、pac=520625<br>
+5、pac=520628<br>
+<br>
+我同时对比了QGIS、ArcGIS中提供的Dissolve工具的融合效果（使用pac与name），就都存在裂缝情况上：
+合并后的数量都是：2900</p>
+<p>arcgis 优于 wukong 优于 qgis</p>
+</blockquote>
+<h4 id="arcgis">ArcGIS<a hidden class="anchor" aria-hidden="true" href="#arcgis">#</a></h4>
+<p><img loading="lazy" src="https://zhou-fuyi.github.io/picx-images-hosting/202310092242009.3ye75ylqmv.webp" alt="202310092242009"  />
+</p>
+<h4 id="qgis">QGIS<a hidden class="anchor" aria-hidden="true" href="#qgis">#</a></h4>
+<p><img loading="lazy" src="https://zhou-fuyi.github.io/picx-images-hosting/202310092242600.2h8247hlwe.webp" alt="202310092242600"  />
+</p>
+<h4 id="wukong">WuKong<a hidden class="anchor" aria-hidden="true" href="#wukong">#</a></h4>
+<p><img loading="lazy" src="https://zhou-fuyi.github.io/picx-images-hosting/202310092243119.b8nifpy5g.webp" alt="202310092243119"  />
+</p>
+<h3 id="source-code">Source Code<a hidden class="anchor" aria-hidden="true" href="#source-code">#</a></h3>
+<p><a href="https://github.com/zhou-fuyi/wukong">wukong-github</a></p>
+<h3 id="小结">小结<a hidden class="anchor" aria-hidden="true" href="#小结">#</a></h3>
+<p>因做境界合并，开发了WuKong程序，但是其含义并不仅仅只是进行境界合并，他是一个基于国家开放的基础地理信息数据的（目前是基于1：100玩基础地理信息数据），可以进行归一、转换、释放的通用程序。</p>
+<p>虽然目前仅完成了基础境界的合并（且存在瑕疵，但好歹也和QGIS的实现差不多不是），但这仅仅只是开始，还有更多的内容可以实现。</p>
+<h2 id="参考">参考<a hidden class="anchor" aria-hidden="true" href="#参考">#</a></h2>
+<h3 id="全国地理信息资源目录服务系统httpswwwwebmapcnhttpswwwwebmapcn"><a href="https://www.webmap.cn/">全国地理信息资源目录服务系统（https://www.webmap.cn/）</a><a hidden class="anchor" aria-hidden="true" href="#全国地理信息资源目录服务系统httpswwwwebmapcnhttpswwwwebmapcn">#</a></h3>
+<p><a href="https://www.webmap.cn/commres.do?method=result100W"></a></p>
+<p>数据来源于全国地理信息资源目录服务系统：www.webmap.cn</p>
+<h3 id="gbt-13989-2012-国家基本比例尺地形图分幅和编号httpcgb688cnbzgkgbshowgbtypeonlinehcno30799a9af9bfa98e77d21abc5f0984e2"><a href="http://c.gb688.cn/bzgk/gb/showGb?type=online&hcno=30799A9AF9BFA98E77D21ABC5F0984E2">GB/T 13989-2012 国家基本比例尺地形图分幅和编号</a><a hidden class="anchor" aria-hidden="true" href="#gbt-13989-2012-国家基本比例尺地形图分幅和编号httpcgb688cnbzgkgbshowgbtypeonlinehcno30799a9af9bfa98e77d21abc5f0984e2">#</a></h3>
+<h4 id="11000000地形图的分幅">1：1000000地形图的分幅<a hidden class="anchor" aria-hidden="true" href="#11000000地形图的分幅">#</a></h4>
+<p>经度：72~138（E），43~53（11）</p>
+<p>纬度：0~56（N），A~N（14）</p>
+<p><img loading="lazy" src="https://zhou-fuyi.github.io/picx-images-hosting/202310092249727.6m3ngberzc.webp" alt="202310092249727"  />
+</p>
+<p><img loading="lazy" src="https://zhou-fuyi.github.io/picx-images-hosting/202310092249838.3d4jjnracw.webp" alt="202310092249838"  />
+</p>
+<h3 id="gbt-33183-2016-基础地理信息-150-000地形要素数据规范httpsopenstdsamrgovcnbzgkgbnewgbinfohcno95caa9d86228b35440b422107ddf4fac"><strong><a href="https://openstd.samr.gov.cn/bzgk/gb/newGbInfo?hcno=95CAA9D86228B35440B422107DDF4FAC">GB/T 33183-2016 基础地理信息 1:50 000地形要素数据规范</a></strong><a hidden class="anchor" aria-hidden="true" href="#gbt-33183-2016-基础地理信息-150-000地形要素数据规范httpsopenstdsamrgovcnbzgkgbnewgbinfohcno95caa9d86228b35440b422107ddf4fac">#</a></h3>
+<h4 id="150000地形要素属性表结构">1:50000地形要素属性表结构<a hidden class="anchor" aria-hidden="true" href="#150000地形要素属性表结构">#</a></h4>
+<ul>
+<li>境界与政区</li>
+</ul>
+<p><img loading="lazy" src="https://zhou-fuyi.github.io/picx-images-hosting/202310092250624.pf39ay913.webp" alt="202310092250624"  />
+</p>
+<ul>
+<li>地名</li>
+</ul>
+<p><img loading="lazy" src="https://zhou-fuyi.github.io/picx-images-hosting/202310092251089.9nzjhjg46y.webp" alt="202310092251089"  />
+</p>
+<h4 id="150000地形要素数据要素内容与选取指标">1:50000地形要素数据要素内容与选取指标<a hidden class="anchor" aria-hidden="true" href="#150000地形要素数据要素内容与选取指标">#</a></h4>
+<p><img loading="lazy" src="https://zhou-fuyi.github.io/picx-images-hosting/202310092252694.7smyox3ol9.webp" alt="202310092252694"  />
+</p>
+<h3 id="走天涯徐小洋公众号">走天涯徐小洋公众号<a hidden class="anchor" aria-hidden="true" href="#走天涯徐小洋公众号">#</a></h3>
+<p><a href="https://mp.weixin.qq.com/s?__biz=MzI4OTU3NTY1OA==&mid=2247498194&idx=1&sn=19498810d66555fd1ef703ea7c693385&scene=21#wechat_redirect">2021版国家基础地理数据库批量下载与拼接方法</a></p>
+<p><a href="https://mp.weixin.qq.com/s?__biz=MzI4OTU3NTY1OA==&mid=2247487190&idx=1&sn=e2653937da9c1784799e5824251a4e29&scene=21#wechat_redirect">【资源分享】如何查找靠谱的国标，全文免费看！全文免费看！全文免费看！</a></p>
+<p><a href="https://mp.weixin.qq.com/s?__biz=MzI4OTU3NTY1OA==&mid=2247497104&idx=1&sn=5e0faeb957f24ff0065cab5bfe48432c&scene=21#wechat_redirect">1：100万基础地理数据库怎么看？怎么用？能干嘛？</a></p>
+<h3 id="gdal">GDAL<a hidden class="anchor" aria-hidden="true" href="#gdal">#</a></h3>
+<h4 id="vector-openfilegdb">vector-openfilegdb<a hidden class="anchor" aria-hidden="true" href="#vector-openfilegdb">#</a></h4>
+<p><a href="https://gdal.org/user/vector_data_model.html">Vector Data Model - GDAL documentation</a></p>
+<p><a href="https://gdal.org/drivers/vector/openfilegdb.html#vector-openfilegdb">ESRI File Geodatabase (OpenFileGDB) - GDAL documentation</a></p>
+<p><a href="https://gdal.org/api/java/index.html">Java bindings - GDAL documentation</a></p>
+<p><a href="https://gdal.org/java/">Overview (GDAL/OGR 3.5.0 Java bindings API)</a></p>
+<h3 id="other">Other<a hidden class="anchor" aria-hidden="true" href="#other">#</a></h3>
+<p><a href="https://github.com/modood/Administrative-divisions-of-China">https://github.com/modood/Administrative-divisions-of-China</a></p>
+<p><a href="https://postgis.net/docs/ST_Centroid.html">ST_Centroid</a></p>
+<h3 id="conda">Conda<a hidden class="anchor" aria-hidden="true" href="#conda">#</a></h3>
+<p><a href="https://docs.conda.io/en/latest/">Conda - Conda documentation</a></p>
+<p><a href="https://www.jianshu.com/p/edaa744ea47d?u_atoken=121f43f1-fdcd-4e6e-89b8-78ed0b5d53c0&u_asession=01vJCfZWOT-w4M8anEMxIiBiOhLNeu-JkFZ_1KGed-3sZ5KvtDozh1Mrb1DIwpJLk3X0KNBwm7Lovlpxjd_P_q4JsKWYrT3W_NKPr8w6oU7K-qwZKCFd8tSMwtYlTqNfz-slvTX-jMTLEIhdGFg3rxgWBkFo3NEHBv0PZUm6pbxQU&u_asig=05xVYRAyyG4jUvWvkBikdy2PaJsGgB3Psrk2Cn09aqTIw2KSnTmkyd_zkKJkygeb8FKy9FKfeWou2VcIksVk-ZbSDOG2ssli4mJ4UUI7IMCGfwGiBtAg6M8Yf_oXm2MClLCe0sIXSHWKUsBpsSyIE9dNxOp5PcZ_N657S9lhbnyrz9JS7q8ZD7Xtz2Ly-b0kmuyAKRFSVJkkdwVUnyHAIJzW7IC2avqF1LIrtlLweo07DIG-tDp0CEEzAQrdkGCrnV6FPw117USKdEPc8n7HkzU-3h9VXwMyh6PgyDIVSG1W_cRkRc5S0cET8575x2ZLM6H-LLY_Nj0_-S2jVka7GV0u0cWTVXVHmnS21MwbSLtAX3hGch3yOJtwizh8Cez--mmWspDxyAEEo4kbsryBKb9Q&u_aref=cjZDZ%2B0OYiEMl2o1Z5eKyXsruzQ%3D">conda的安装与使用 2.0版（2022-08-12更新）</a></p>
+
+
+  </div>
+
+  <footer class="post-footer">
+    <ul class="post-tags">
+      <li><a href="https://fuyi-atlas.github.io/tags/weather/">Weather</a></li>
+    </ul>
+<nav class="paginav">
+  <a class="prev" href="https://fuyi-atlas.github.io/posts/program/micro-weather/007/">
+    <span class="title">« Prev</span>
+    <br>
+    <span>微天气 Github Action镜像自动构建与推送</span>
+  </a>
+  <a class="next" href="https://fuyi-atlas.github.io/posts/program/micro-weather/005/">
+    <span class="title">Next »</span>
+    <br>
+    <span>微天气—行政区划数据（一）</span>
+  </a>
+</nav>
+
+  </footer>
+</article>
+    </main>
+    
+<footer class="footer">
+    <span>&copy; 2024 <a href="https://fuyi-atlas.github.io/">Fuyi Atlas</a></span>
+    <span>
+        Powered by
+        <a href="https://gohugo.io/" rel="noopener noreferrer" target="_blank">Hugo</a> &
+        <a href="https://github.com/adityatelange/hugo-PaperMod/" rel="noopener" target="_blank">PaperMod</a>
+    </span>
+</footer>
+<a href="#top" aria-label="go to top" title="Go to Top (Alt + G)" class="top-link" id="top-link" accesskey="g">
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 12 6" fill="currentColor">
+        <path d="M12 6H0l6-6z" />
+    </svg>
+</a>
+
+<script>
+    let menu = document.getElementById('menu')
+    if (menu) {
+        menu.scrollLeft = localStorage.getItem("menu-scroll-position");
+        menu.onscroll = function () {
+            localStorage.setItem("menu-scroll-position", menu.scrollLeft);
+        }
+    }
+
+    document.querySelectorAll('a[href^="#"]').forEach(anchor => {
+        anchor.addEventListener("click", function (e) {
+            e.preventDefault();
+            var id = this.getAttribute("href").substr(1);
+            if (!window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+                document.querySelector(`[id='${decodeURIComponent(id)}']`).scrollIntoView({
+                    behavior: "smooth"
+                });
+            } else {
+                document.querySelector(`[id='${decodeURIComponent(id)}']`).scrollIntoView();
+            }
+            if (id === "top") {
+                history.replaceState(null, null, " ");
+            } else {
+                history.pushState(null, null, `#${id}`);
+            }
+        });
+    });
+
+</script>
+<script>
+    var mybutton = document.getElementById("top-link");
+    window.onscroll = function () {
+        if (document.body.scrollTop > 800 || document.documentElement.scrollTop > 800) {
+            mybutton.style.visibility = "visible";
+            mybutton.style.opacity = "1";
+        } else {
+            mybutton.style.visibility = "hidden";
+            mybutton.style.opacity = "0";
+        }
+    };
+
+</script>
+<script>
+    document.getElementById("theme-toggle").addEventListener("click", () => {
+        if (document.body.className.includes("dark")) {
+            document.body.classList.remove('dark');
+            localStorage.setItem("pref-theme", 'light');
+        } else {
+            document.body.classList.add('dark');
+            localStorage.setItem("pref-theme", 'dark');
+        }
+    })
+
+</script>
+<script>
+    document.querySelectorAll('pre > code').forEach((codeblock) => {
+        const container = codeblock.parentNode.parentNode;
+
+        const copybutton = document.createElement('button');
+        copybutton.classList.add('copy-code');
+        copybutton.innerHTML = 'copy';
+
+        function copyingDone() {
+            copybutton.innerHTML = 'copied!';
+            setTimeout(() => {
+                copybutton.innerHTML = 'copy';
+            }, 2000);
+        }
+
+        copybutton.addEventListener('click', (cb) => {
+            if ('clipboard' in navigator) {
+                navigator.clipboard.writeText(codeblock.textContent);
+                copyingDone();
+                return;
+            }
+
+            const range = document.createRange();
+            range.selectNodeContents(codeblock);
+            const selection = window.getSelection();
+            selection.removeAllRanges();
+            selection.addRange(range);
+            try {
+                document.execCommand('copy');
+                copyingDone();
+            } catch (e) { };
+            selection.removeRange(range);
+        });
+
+        if (container.classList.contains("highlight")) {
+            container.appendChild(copybutton);
+        } else if (container.parentNode.firstChild == container) {
+            
+        } else if (codeblock.parentNode.parentNode.parentNode.parentNode.parentNode.nodeName == "TABLE") {
+            
+            codeblock.parentNode.parentNode.parentNode.parentNode.parentNode.appendChild(copybutton);
+        } else {
+            
+            codeblock.parentNode.appendChild(copybutton);
+        }
+    });
+</script>
+</body>
+
+</html>

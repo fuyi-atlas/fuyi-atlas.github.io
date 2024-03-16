@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="utf-8" standalone="yes"?>
+<rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom" xmlns:content="http://purl.org/rss/1.0/modules/content/">
+  <channel>
+    <title>Merge Interval on Fuyi Atlas</title>
+    <link>https://fuyi-atlas.github.io/tags/merge-interval/</link>
+    <description>Recent content in Merge Interval on Fuyi Atlas</description>
+    <generator>Hugo -- gohugo.io</generator>
+    <language>en</language>
+    <lastBuildDate>Wed, 16 Sep 2020 21:41:52 +0800</lastBuildDate>
+    <atom:link href="https://fuyi-atlas.github.io/tags/merge-interval/index.xml" rel="self" type="application/rss+xml" />
+    <item>
+      <title>合并区间</title>
+      <link>https://fuyi-atlas.github.io/posts/program/algorithm/merge-interval-001/</link>
+      <pubDate>Wed, 16 Sep 2020 21:41:52 +0800</pubDate>
+      <guid>https://fuyi-atlas.github.io/posts/program/algorithm/merge-interval-001/</guid>
+      <description>前言 在工作中，还没有仔细的去研究过一些算法实现，直到最近面试才知道，自己的数据结构与算法的功底这么差。 知道总是比不知道的强，那么就一个一个的来吧，我也会通过文字的方式记录自己的算法道路，下一个目标就是LeetCode。
+如题（某次面试题） 给定⼀个按开始时间从⼩到大排序的时间区间集合，请将重叠的区间合并。时间区间集合⽤用一个二维数组表示， 二维数组的每⼀行表示⼀个时间区间（闭区间），其中 0 位置元素表示时间区间开始，1 位置元素表示时间区间结束。 例 1：输入：[ [1, 3], [2, 6], [8, 10], [15, 18] ]返回： [ [1, 6], [8, 10], [15, 18]] 解释：时间区间 [1, 3] 和 [2, 6] 有部分重叠，合并之后为 [1, 6] 例 2：输入：[[1, 4], [4, 5]]返回：[[1, 5]]解释：时间区间[1，4] 和 [4，5]重叠了了⼀一个时间点，合并之后为 [1，5] 需要实现的⽅法原型：int[][] merge(int[][] intervals)
+二维数组中的每一行表示一个时间区间（闭区间），其中0位置表示开始时间，1位置表示结束时间 给定的时间区间集合按照开始时间从小到大排序，即为有序 这里给出的题还是比较简单的，因为给定的时间区间集合已经是一个有序的集合了，需要实现的内容只剩下区间合并了。 由题中可知，需要合并具有重叠部分的区间，只要确定了重叠的条件，便基本完成了解答。
+在已完成时间区间开始时间从小到大的排序后，那么此时的时间区间集合在时间横轴上回呈现类似上图的情况， 此时可以从小到大遍历时间区间集合，进行合并或收集。这里需要一个容器存放目标结果，也就是没有任何交集的时间区间。 具体实现代码如下所示：
+/** * 时间区间合并方法 * * @param intervals * @return */ public static int [][] merge(int [][] intervals) { // 二维数组行数 int rows = intervals.</description>
+    </item>
+  </channel>
+</rss>

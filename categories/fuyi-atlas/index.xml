@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="utf-8" standalone="yes"?>
+<rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom" xmlns:content="http://purl.org/rss/1.0/modules/content/">
+  <channel>
+    <title>Fuyi Atlas</title>
+    <link>https://fuyi-atlas.github.io/categories/fuyi-atlas/</link>
+    <description>Recent content on Fuyi Atlas</description>
+    <generator>Hugo -- gohugo.io</generator>
+    <language>en</language>
+    <lastBuildDate>Sun, 19 Feb 2023 22:29:01 +0800</lastBuildDate>
+    <atom:link href="https://fuyi-atlas.github.io/categories/fuyi-atlas/index.xml" rel="self" type="application/rss+xml" />
+    <item>
+      <title>Fuyi Atlas Init</title>
+      <link>https://fuyi-atlas.github.io/posts/other/fuyi-atlas-init/</link>
+      <pubDate>Sun, 19 Feb 2023 22:29:01 +0800</pubDate>
+      <guid>https://fuyi-atlas.github.io/posts/other/fuyi-atlas-init/</guid>
+      <description>前言 I have a dream too!
+开源技术赋予我们站在巨人的肩膀上做到更高更强的可能，我想通过开源技术来构建一个地理信息的世界（such as: one personal cloud gis），愿给地理信息数据带来更多的使用价值。当前主要关注空间数据库、数据处理与应用以及数据渲染，由内到外，逐步构建。既然都说人类活动所接触、产生的信息80%以上都与地理空间位置有关，那么这些空间数据就应该很容易的被使用，而不是仅被围困在专业领域内，不是吗？
+Fuyi Atlas（拂衣志），取自 《侠客行》、Cloud Atlas以及Discovery Atlas。愿自己也能行此间小事，而非蹉跎岁月。
+Fuyi Atlas Website将会使用Hugo + Github Pages进行构建，本文用于记录Fuyi Atlas的初始构建过程。
+HUGO是什么 Hugo is one of the most popular open-source static site generators. With its amazing speed and flexibility, Hugo makes building websites fun again.
+Hugo是一个使用GO语言编写的，开源的，静态站点生成器。
+也就是说，你可以使用Hugo来快速构建你自己的静态站点。比如个人博客、知识库、产品介绍、文档等等。
+我此前使用vuepress来构建我的个人站点，接触Hugo之后，更愿意使用Hugo。那么我将使用Hugo代替vuepress来构建我的个人站点。理由有那么几个：
+Hugo是一个纯粹的生成器 Hugo没有过多的生态依赖 Hugo更轻 据说更快，其LiveReload可以实现近实时的内容刷新 挺多可选的开源主题 使用更加简单 我也不是很喜欢node_modules
+Fuyi Atlas Site Build Hugo Install Hugo is available in two editions: standard and extended.</description>
+    </item>
+  </channel>
+</rss>
