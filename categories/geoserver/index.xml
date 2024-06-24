@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="utf-8" standalone="yes"?>
+<rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom" xmlns:content="http://purl.org/rss/1.0/modules/content/">
+  <channel>
+    <title>Geoserver on Fuyi Atlas</title>
+    <link>https://fuyi-atlas.github.io/categories/geoserver/</link>
+    <description>Recent content in Geoserver on Fuyi Atlas</description>
+    <generator>Hugo -- gohugo.io</generator>
+    <language>en</language>
+    <lastBuildDate>Thu, 09 Mar 2023 22:33:44 +0800</lastBuildDate>
+    <atom:link href="https://fuyi-atlas.github.io/categories/geoserver/index.xml" rel="self" type="application/rss+xml" />
+    <item>
+      <title>GeoServer开发环境搭建</title>
+      <link>https://fuyi-atlas.github.io/posts/program/geoserver/002/</link>
+      <pubDate>Thu, 09 Mar 2023 22:33:44 +0800</pubDate>
+      <guid>https://fuyi-atlas.github.io/posts/program/geoserver/002/</guid>
+      <description>前言 本文用于记录GeoServer开发环境的搭建过程
+通过GeoServer发布计划可以看到，在2.23.x版本开始，会移除对jdk1.8的支持。那么当前我们会选择2.22.x版本进行研究
+环境 JAVA：1.8或11 Maven Git Action 获取源码 git clone git://github.com/geoserver/geoserver.git geoserver # or git clone https://github.com/geoserver/geoserver.git geoserver 代码库结构 Each branch has the following structure:
+build - release and continuous integration scripts doc - sources for the user and developer guides src - java sources for GeoServer itself data - a variety of GeoServer data directories / configurations 切换到2.22.x分支 # 查看分支 git branch -av # 切换分支 git checkout -b 2.</description>
+    </item>
+    <item>
+      <title>深入研究GeoServer—开篇</title>
+      <link>https://fuyi-atlas.github.io/posts/program/geoserver/001/</link>
+      <pubDate>Thu, 09 Mar 2023 22:30:19 +0800</pubDate>
+      <guid>https://fuyi-atlas.github.io/posts/program/geoserver/001/</guid>
+      <description>为什么需要深入研究GeoServer GeoServer是一个开源的、流行的、Java实现的可发布和共享地理信息数据的软件服务器，是WMS、WCS、WFS的标准实现，含WMTS GeoServer功能强大，但是我可能只会用到其中的一两个部分，比如坐标转换与WMTS服务。可以通过研究将其进行提取和重组，形成符合我要求的，更加精简方便的软件服务器 GIS后端开发绕不过去的知识点 如何进行研究 开发环境搭建 通过WMTS请求链接到源码 通过源码进行研究学习 … 未完待续&amp;hellip;</description>
+    </item>
+  </channel>
+</rss>

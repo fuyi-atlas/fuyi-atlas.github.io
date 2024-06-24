@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="utf-8" standalone="yes"?>
+<rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom" xmlns:content="http://purl.org/rss/1.0/modules/content/">
+  <channel>
+    <title>Postgresql on Fuyi Atlas</title>
+    <link>https://fuyi-atlas.github.io/tags/postgresql/</link>
+    <description>Recent content in Postgresql on Fuyi Atlas</description>
+    <generator>Hugo -- gohugo.io</generator>
+    <language>en</language>
+    <lastBuildDate>Thu, 16 Jul 2020 22:03:58 +0800</lastBuildDate>
+    <atom:link href="https://fuyi-atlas.github.io/tags/postgresql/index.xml" rel="self" type="application/rss+xml" />
+    <item>
+      <title>PostgreSQL11.2 数据恢复记录（From Physical Files）</title>
+      <link>https://fuyi-atlas.github.io/posts/program/database/postgresql/11.2-data-recovery/</link>
+      <pubDate>Thu, 16 Jul 2020 22:03:58 +0800</pubDate>
+      <guid>https://fuyi-atlas.github.io/posts/program/database/postgresql/11.2-data-recovery/</guid>
+      <description>前言 记录一下PostgreSQL11.2的数据恢复，场景是这样的，我们在A主机（windows server 2008）上安装一个PostgreSQL11.2，突然有一天A主机坏掉了，只能将磁盘卸载下来挂载到新的主机上，但是如何才能快速有效的将之前磁盘中的数据恢复呢？
+重新注册为windows服务（失败） 这里我使用主机B（windows server 2012 R2）进行重新注册 参考重新注册PostgreSQL服务
+找到并PostgreSQL的安装路径，在此启动命令行工具 使用pg_ctl命令将PostgreSQL11.2重新注册为服务，该命令的具体用法和写法可以查看pg_ctl帮助文档（pg_ctl &amp;ndash;help） 结果很现实，没有能够成功，具体的原因未知，返回提示消息为：无法注册服务，错误码1783
+此路不通，那我只能换一种方式。
+替换PostgreSQL的数据目录（成功） PostgreSQL的数据是存储到data目录下，具体的目录是服务安装的时候指定的，默认是在服务的安装目录下。只要你还拥有完整的data目录，那么你是完全可以从这一份原始物理文件进行数据恢复的。
+在这里我使用主机C（windows10）作为测试机 先在C主机上安装PostgreSQL11.2 将原始data目录拷贝到C主机PostgreSQL数据存在目录（即data）的同级目录，并重命名为data-bak（命名随意，符合规则且不冲突就行） 然后参照Change the default PGDATA directory on Windows完成剩余替换步骤 停止C主机的PostgreSQl11.2服务 修改注册表，用意为重新指定服务使用的data目录，替换为我拷贝的data-bak目录，注册表路径：HKEY_LOCAL_MACHINE\SYSTEM\CurrentControlSet\Services\pgsql-some version，修改ImagePath项的value值中 -D 参数 到windows服务管理中查看PostgreSQL服务属性，检验可执行文件路径中是否已经指向了data-bak路径 重启PostgreSQL服务 这里有坑，请注意！ 如果出现服务启动后停止，请进行以下检查： 1. 检查 data-bak 目录权限，确保该目录和同级的 data 目录的权限一致 2. 检查 是否存在 postmaster.pid 文件，如果存在将其删除（这个未测试，听说可以哦） 3. 检查 postgresql.conf 文件，保持端口号、语言环境（lc_messages、lc_monetary、lc_numeric、lc_time）等基础配置和当前的服务一致，避免配置异常导致启动失败 4. 检查 pg_hba.conf 文件 我按照步骤完成了以上操作，但是发现还是无法在服务管理中启动服务，我通过事件查看器查看日志，也只是看到超时导致启动失败，遂又google+baidu一把，获取链接一个postgresql 在等待服务器启动时超时
+在这里提到需要执行一个命令：pg_resetwal -f E:\Server\PostgreSQL\11\data-bak 执行成功会得到打印信息：Write-ahead log reset
+然后可以直接在命令行验证是否可以正常启动：pg_ctl -D E:\Server\PostgreSQL\11\data-bak
+登录密码应该是旧的密码，我这里是直接使用刚安装PostgreSQL产生的postgresql.conf 替换了data-bak中的postgresql.conf ，所以我的登录密码是新设置的，你实在不知道你就改嘛
+我到这里已经能够成功启动了，但是还有坑，还是因为语言环境导致的，如果你的语言环境都一致，那么应该没啥问题了，问题解决方案看后记，最下面</description>
+    </item>
+  </channel>
+</rss>
