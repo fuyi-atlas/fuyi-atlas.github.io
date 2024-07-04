@@ -12,37 +12,39 @@ tags:
   - tile set metadata
 ---
 
+## 前言
+
+其实，在此前[矢量金字塔技术研究](https://fuyi-atlas.github.io/posts/gis/vector-pyramid-technology/)一文中已经大致提及了瓦片金字塔与TileMatrixSet的关系，为什么还要在这里再次说明呢？主要是前文更侧重于矢量金字塔的概念定义，对于TileMatrixSet的描述过少，所以才会再次对TileMatrixSet进行说明。本文将基于 OGC Two Dimensional Tile Matrix Set 标准对TileMatrixSet进行研究探讨，将侧重于说明其基本构成要素的定义以及整体的技术实现。而GeoWebCache中的GridSet作为典型实现，本文将会对其进行再次说明，以印证OGC 关于TileMatrixSet的定义。由于内容较多，本文将分为下上两个篇章进行描述。上篇是对TileMatrixSet以及其构成要素的基本概念进行描述，而下篇则是对GeoWebCache中的GridSet实现进行研究，同时结合我国CGCS2000切片方案对TileMatrixSet格网划分计算原理进行探讨，另附带说明Geo Atlas中关于此模块的实现细节。
+
+本章节为上篇：TileMatrixSet及其构成要素的基本概念。
+
 ## 什么是TileMatrixSet？
 
 TileMatrixSet，即Tile Matrix Set，源自 [**OGC Two Dimensional Tile Matrix Set**](https://www.ogc.org/standard/tms/)(目前已更新到v2)。该标准定义了瓦片矩阵集的规则和要求，作为一种基于一组规则网格对空间进行索引的方式，这些规则网格为坐标参考系统中有限比例列表定义了一个域（瓦片矩阵）。
 
 >💡 The OGC Two Dimensional Tile Matrix Set and Tile Set Metadata Standard defines the rules and requirements for a tile matrix set as a way to index space based on a set of regular grids defining a domain (tile matrix) for a limited list of scales in a Coordinate Reference System.
 
-再来看看[Tiles API](https://docs.ogc.org/is/20-057/20-057.html)中的描述：该标准定义了用于指定瓦片矩阵集和描述瓦片集的逻辑模型和编码。一个瓦片矩阵集代表一种切片方案，它使得应用程序能够基于坐标参考系统 (CRS) 中为多个尺度（比例分级）定义的一组规则网格来分区和索引空间。
-
->💡 That Standard defines logical models and encodings for specifying tile matrix sets and describing tile sets. A tile matrix set is a tiling scheme that enables an application to partition and index space based on a set of regular grids defined for multiple scales in a Coordinate Reference System (CRS).
-
 在瓦片矩阵集中，每个瓦片矩阵被划分为规则的瓦片。在瓦片矩阵集合中，瓦片可以由瓦片列、瓦片行和瓦片矩阵标识符（即矩阵集标识与层标识）来唯一地标识。
 
 >💡 In a tile matrix set, each tile matrix is divided into regular tiles. In a tile matrix set, a tile can be univocally identified by a tile column, a tile row, and a tile matrix identifier.
 
+再来看看[Tiles API](https://docs.ogc.org/is/20-057/20-057.html)中的描述：该标准定义了用于指定瓦片矩阵集和描述瓦片集的逻辑模型和编码。一个瓦片矩阵集代表一种切片方案，它使得应用程序能够基于坐标参考系统 (CRS) 中为多个尺度（比例分级）定义的一组规则网格来分区和索引空间。
+
+>💡 That Standard defines logical models and encodings for specifying tile matrix sets and describing tile sets. A tile matrix set is a tiling scheme that enables an application to partition and index space based on a set of regular grids defined for multiple scales in a Coordinate Reference System (CRS).
+
 从上面我们可以获取到如下几个信息：
 
 - 它是用于对空间进行分区和索引的一种方式方法
-- 基于某个坐标参考系统，并基于该坐标参考系统持有一组有限比例列表（尺度分级）
+- 基于某个坐标参考系统，并基于该坐标参考系统持有的一组有限比例列表（尺度分级）
 - 表现为一组规则格网，且该组格网与有限尺度分级列表一一对应
 
-基于此，可以确定TileMatrixSet正是对应着[瓦片金字塔结构](https://fuyi-atlas.github.io/posts/gis/vector-pyramid-technology/#%E7%93%A6%E7%89%87%E9%87%91%E5%AD%97%E5%A1%94%E5%88%86%E5%9D%97)。TileMatrixSet基于的坐标系对应着瓦片金字塔的瓦片投影坐标系，格网表达对应着瓦片坐标系，有限尺度分级对应瓦片金字塔尺度分层。从瓦片金字塔模型来说，TileMatrixSet基于多尺度分级实现金字塔的多尺度分层表达，并基于此为每一个尺度定义了一个边界，而后基于一定规则进行格网划分进而形成一个域（瓦片矩阵），此为分块。
+基于此，可以确定TileMatrixSet正是对应着[瓦片金字塔结构](https://fuyi-atlas.github.io/posts/gis/vector-pyramid-technology/#%E7%93%A6%E7%89%87%E9%87%91%E5%AD%97%E5%A1%94%E5%88%86%E5%9D%97)。TileMatrixSet基于的坐标系对应着瓦片金字塔的瓦片投影坐标系，格网表达对应着瓦片组织结构与瓦片坐标系，有限尺度分级对应瓦片金字塔尺度分层。从瓦片金字塔模型来说，TileMatrixSet基于多尺度分级实现金字塔的多尺度分层表达，并基于此为每一个尺度定义了一个边界，而后基于一定规则进行格网划分进而形成一个域（瓦片矩阵），此为分块。
 
 对于分层以及分层分块的差异可参见如下两图：
 
 <div style="display: flex; justify-content: space-between; align-items: center;">
   <img src="https://zhou-fuyi.github.io/picx-images-hosting/HasPyramid.67x9qxbduu.webp" alt="金字塔分层示意" style="margin: 5px;"><img src="https://zhou-fuyi.github.io/picx-images-hosting/金字塔分层分块示意图.92q0bkasp1.webp" alt="瓦片金字塔分层分块示意图" style="margin: 5px; width: 310px">
 </div>
-
-其实，矢量金字塔技术研究一文中已经大致提及了瓦片金字塔与TileMatrixSet的关系，为什么还要在这里再次说明呢？主要是前文更侧重于矢量金字塔的概念定义，对于TileMatrixSet的描述过少，所以才会再次对TileMatrixSet进行说明。本文将基于 OGC Two Dimensional Tile Matrix Set 标准对TileMatrixSet进行研究探讨，将侧重于说明其基本构成要素的定义以及整体的技术实现。而GeoWebCache中的GridSet作为典型实现，本文将会对其进行再次说明，以印证OGC 关于TileMatrixSet的定义。由于内容较多，本文将分为下上两个篇章进行描述。上篇是对TileMatrixSet以及其构成要素的基本概念进行描述，而下篇则是对GeoWebCache中的GridSet实现进行研究，同时结合我国CGCS2000切片方案进行TileMatrixSet格网划分计算原理进行探讨，另附带说明Geo Atlas中关于此模块的实现细节。
-
-本章节为上篇：TileMatrixSet的基本概念。
 
 ## 术语
 
@@ -121,7 +123,10 @@ scheme that defines how space is partitioned into individual tiles, potentially 
 
 A tiling scheme defines the spatial reference system and the geometric properties of each tile defined by the scheme. Those properties include which space each tile occupies, i.e. its extent, as well as a tile coordinate origin if a particular corner of origin convention is established.
 
-切片方案定义了空间参考系统以及该方案定义的每个切片的几何属性。这些属性包括每个切片占据的空间，即其范围，以及切片坐标原点（如果建立了特定的原点约定角）。
+切片方案定义了空间参考系统以及该方案定义的每个切片的几何属性。这些属性（几何属性）包括每个切片占据的空间，即其范围，以及切片坐标原点（如果建立了特定的原点约定角）。
+
+
+>💡 ps：难道不应该强制要求，必须进行切片坐标原点的指定吗？无论是左上角还是左下角还是其他🤔
 
 ### Tile Matrix（瓦片矩阵）
 
@@ -149,7 +154,7 @@ scheme allowing to uniquely reference a tile in a tiling scheme by the use of a 
 
 允许通过使用唯一标识符（或标识符集）来唯一引用切片方案中的瓦片的方案，反之亦然，该唯一标识符（或唯一标识符集）对应于满足特定瓦片的几何属性的空间。
 
->💡 瓦片索引方案对应瓦片坐标系，上面描述的是瓦片坐标系（唯一标识符或标识符集，如：x、y、z）与空间参考之间的对应关系，可以相互转换。
+>💡 瓦片索引方案对应瓦片坐标系，上面描述的是瓦片坐标系（唯一标识符或标识符集，如：x、y、z）与基于空间参考下瓦片占据的空间（即其范围，BBox）之间的对应关系，可以相互转换。
 
 ### Tile Set（切片集）
 
@@ -157,7 +162,7 @@ a set of tiles resulting from tiling data according to a particular tiling schem
 
 根据特定切片方案由切片数据生成的一组切片。
 
->💡 从使用上来说，可以是逻辑的（逻辑存在，但还未生成的），也可以是物理存在的
+>💡 从使用上来说，可以是逻辑的（逻辑存在，但还未生成的），也可以是物理存在的。
 
 ### Tile Set Metadata（切片集元数据）
 
@@ -167,7 +172,7 @@ additional metadata beyond the common properties defining the tile set. Such met
 
 metadata describing common properties defining a tile set, layers and styles used to produce the tile set, the limits of the tile matrix with actual data and common metadata such as abstract, owner, author, etc.
 
-描述定切片集的公共属性的元数据、用于生成切片集的图层和样式、具有实际数据的瓦片矩阵的限制以及公共元数据（例如摘要、所有者、作者等）。
+描述定义切片集的公共属性的元数据、用于生成切片集的图层和样式、具有实际数据的瓦片矩阵的限制以及公共元数据（例如摘要、所有者、作者等）。
 
 >💡 总的来说，切片集元数据提供有关切片集的预期用途以及其中包含的原点、访问限制、切片方案、图层、要素属性以及公共元数据（例如摘要、所有者、作者等）信息
 
@@ -175,7 +180,7 @@ metadata describing common properties defining a tile set, layers and styles use
 
 tile that contains vector information that has been generalized (simplified) at the tile scale resolution and clipped by the tile boundaries.
 
-包含已按瓦片比例分辨率概括（简化）并由图块边界裁剪的矢量信息的切片。
+包含已按瓦片比例分辨率概括（简化）并由瓦片边界裁剪的矢量信息的切片。
 
 >💡 实际情况下，如GeoServer所支持的矢量切片，其对于矢量数据的概括（简化）做的并不好。
 
@@ -205,15 +210,15 @@ well-known combination of a coordinate reference system and a set of scales that
 
 #### Tile Matrix 的构成要素
 
-- 原点：规则网格覆盖的边界框的二维空间中的原点和原点角（例如，整数坐标为0的左上角的左上角的CRS坐标）。这是切片集原点，定义整个切片集的空间原点参考点的位置。
+- 原点：规则网格覆盖的边界框的二维空间中的原点和原点角（例如，整数坐标为0的左上角的CRS坐标）。这是切片集原点，定义整个切片集的空间原点参考点的位置。
 - 瓦片大小：CRS 每个维度的瓦片大小（以 CRS 单位表示）
     
     这里隐含的是每个维度（尺度层级）下瓦片大小要一致，但是不同维度的瓦片大小可以不一致。不过在实际使用中，基本上全维度都使用相同的瓦片大小。同时，瓦片的大小基本都使用像素作为单位进行换算。
     
 - 以瓦片单位表示的瓦片矩阵的大小（即瓦片数量），用于封闭（关闭，合围）瓦片空间的边界框。通常，前两个维度的大小称为矩阵宽度和矩阵高度。
-- 比例（表示为比例分母），可以基于给定的Bbox进行计算
+- 比例（表示为比例分母），可以基于给定的BBox进行计算
 
-由于服务无法预测客户端可视化设备的像素大小，因此在本标准中，比例分母是针对“标准化渲染像素大小”0.28  mm xx 0.28  mm（毫米）定义的。该定义与 Web 地图服务 WMS 1.3.0 OGC 06-042 和后来被 WMTS 1.0 OGC 07-057r7 采用的符号编码 (SE) 实现规范 1.1.0 OGC 05-077r4 中使用的定义相同。通常，设备的真实像素尺寸是未知的，0.28 毫米是 2005 年普通显示器的实际像素尺寸。即使当前的显示设备采用小得多的像素尺寸，该值仍被用作参考。
+由于服务无法预测客户端可视化设备的像素大小，因此在本标准中，比例分母是针对“标准化渲染像素大小”0.28  mm x 0.28  mm（毫米）定义的。该定义与 Web 地图服务 WMS 1.3.0 OGC 06-042 和后来被 WMTS 1.0 OGC 07-057r7 采用的符号编码 (SE) 实现规范 1.1.0 OGC 05-077r4 中使用的定义相同。通常，设备的真实像素尺寸是未知的，0.28 毫米是 2005 年普通显示器的实际像素尺寸。即使当前的显示设备采用小得多的像素尺寸，该值仍被用作参考。
 
 >1. 自 20 世纪 80 年代以来，Microsoft Windows 操作系统已将其默认的标准显示每英寸像素 (PPI) 设置为 96。该值的结果约为每像素 0.264 mm。该值与本标准中采用的实际 0.28mm 的相似性可能会造成一些混乱。
 >
@@ -246,13 +251,13 @@ well-known combination of a coordinate reference system and a set of scales that
 
 根据需要在客户端屏幕中表示的比例范围，单个瓦片矩阵（即单层次的矩阵）是不切实际的，并且可能会迫使软件在渲染之前花费太多时间来简化/概括数据集。（因为它仅仅是实现了数据横向上的分块，并没有其他的加成，这也是多尺度分级出现的原因）
 
-通常，会逐步定义多个瓦片矩阵，以覆盖应用程序所需的预期比例范围。瓦片矩阵集是由一组瓦片矩阵组成的瓦片方案，针对特定比例进行了优化（所谓优化即为概括|简化等处理，使得数据可以更好、更快的显示），并由瓦片矩阵标识符标识。每个瓦片矩阵集都有一个可选的近似边界框（即BBox，之所以近似是因为一般取是最小外接矩形MBR →Minimum Bounding Rectangle，并非完全一致），但每个瓦片矩阵都有一个精确的边界框，该边界框是从其他参数间接推导出来的。由于单元格对齐方式不同，每个比例下的瓦片矩阵边界框通常会略有不同（比如4490经纬度投影的0级和1级的边界框就不同）。
+通常，会逐步定义多个瓦片矩阵，以覆盖应用程序所需的预期比例范围。瓦片矩阵集是由一组瓦片矩阵组成的切片方案，针对特定比例进行了优化（所谓优化即为概括|简化等处理，使得数据可以更好、更快的显示），并由瓦片矩阵标识符标识。每个瓦片矩阵集都有一个可选的近似边界框（即BBox，之所以近似应是因为一般取是最小外接矩形MBR →Minimum Bounding Rectangle，并非完全一致。Maybe🤔），但每个瓦片矩阵都有一个精确的边界框，该边界框是从其他参数间接推导出来的。由于单元格对齐方式不同，每个比例下的瓦片矩阵边界框通常会略有不同（比如4490经纬度投影的0级和1级的边界框就不同）。
 
 ![ogc-tilematrixset-def](https://zhou-fuyi.github.io/picx-images-hosting/ogc-tilematrixset-def.1e8eusx720.webp)
 
-瓦片矩阵在瓦片矩阵集中具有唯一的字母数字标识符。一些基于瓦片的实现更喜欢使用缩放级别编号或细节级别指定 (LoD)，其优点是建议瓦片矩阵列表中的某种顺序。本标准不使用缩放级别概念，但为了在更喜欢数字缩放级别的实现中轻松采用本标准，附件 D 中定义的许多瓦片矩阵集使用数字作为瓦片矩阵标识符。在这种情况下，平铺矩阵集中定义的平铺矩阵列表中的索引顺序仍然可以在内部用作缩放级别排序。
+瓦片矩阵在瓦片矩阵集中具有唯一的字母数字标识符。一些基于瓦片的实现更喜欢使用缩放级别编号或细节级别指定 (LoD)，其优点是建议瓦片矩阵列表中的某种顺序。本标准不使用缩放级别概念，但为了在更喜欢数字缩放级别的实现中轻松采用本标准，附件 D 中定义的许多瓦片矩阵集使用数字作为瓦片矩阵标识符。在这种情况下，瓦片矩阵集中定义的瓦片矩阵列表中的索引顺序仍然可以在内部用作缩放级别排序。
 
-在一些其他标准中，瓦片矩阵集概念称为图像金字塔，如 OGC KML 2.2 OGC 07-147r2 标准的第 11.6 条中所示。 JPEG2000 (ISO/IEC 15444-1) 和 JPIP (ISO/IEC 15444-9) 也使用类似的空间划分，称为分辨率级别。然而，在这些情况下，金字塔是自定义的，从更详细的瓦片矩阵（使用方形瓦片）开始，并通过连续聚合前一个尺度的 4 个瓦片来构造下一个尺度的瓦片，依此类推（见图 6） ，并将前一个尺度的每 4 个连续值插值到下一个尺度的一个值中。该方法涉及更严格的结构，该结构具有与二的幂相关的比例以及与较低比例分母上的图块完美重叠的图块。本文档中介绍的平铺矩阵集更加灵活，但 KML superoverlays 或基于 JPEG2000 的实现可以使用此标准以及一些额外的规则来描述其瓦片矩阵集。本文档描述了一些与附录 D 中的 2 的幂相关的比例集的瓦片矩阵集。【可视为通用规范与细分规范的区别，如图像金字塔的基础理论便是与瓦片矩阵集相同的】
+在一些其他标准中，瓦片矩阵集概念称为图像金字塔😯，如 OGC KML 2.2 OGC 07-147r2 标准的第 11.6 条中所示。 JPEG2000 (ISO/IEC 15444-1) 和 JPIP (ISO/IEC 15444-9) 也使用类似的空间划分，称为分辨率级别。然而，在这些情况下，金字塔是自定义的，从更详细的瓦片矩阵（使用方形瓦片）开始，并通过连续聚合前一个尺度的 4 个瓦片来构造下一个尺度的瓦片，依此类推（见图 6） ，并将前一个尺度的每 4 个连续值插值到下一个尺度的一个值中。该方法涉及更严格的结构，该结构具有与二的幂相关的比例以及与较低比例分母上的图块完美重叠的图块（二叉树结构，自底向上进行瓦片金字塔构建）。本文档中介绍的平铺矩阵集更加灵活，但 KML superoverlays 或基于 JPEG2000 的实现可以使用此标准以及一些额外的规则来描述其瓦片矩阵集。本文档描述了一些与附录 D 中的 2 的幂相关的比例集的瓦片矩阵集。【可视为通用规范与细分规范的区别，如图像金字塔的基础理论便是与瓦片矩阵集相同的】
 
 >💡 注意：客户端和服务器在比较浮点数与公差时必须小心（必须使用双精度、16 位数字）。
 
@@ -284,7 +289,7 @@ well-known combination of a coordinate reference system and a set of scales that
 
 ![tile-coordinates](https://zhou-fuyi.github.io/picx-images-hosting/tile-coordinates.7p3h7t2z88.webp)
 
->💡 在目前瓦片服务中，基本上只需要给定瓦片行、瓦片列、瓦片矩阵标识即可，大部分时候所述的瓦片坐标系就是者三者组合。当然，瓦片坐标系各种各样，可以基于二叉树，可以是其他任意的法则，只不过瓦片行、瓦片列、瓦片矩阵标识的组合更加通用而已。
+>💡 在目前瓦片服务中，基本上只需要给定瓦片行、瓦片列、瓦片矩阵标识即可，大部分时候所述的瓦片坐标系就是这三者组合。当然，瓦片坐标系各种各样，可以基于二叉树，可以是其他任意的法则，只不过瓦片行、瓦片列、瓦片矩阵标识的组合更加通用而已。
 
 
 ### Variable width tile matrices（可变宽矩阵）
@@ -321,7 +326,7 @@ well-known combination of a coordinate reference system and a set of scales that
 
 瓦片由tileMatrix id、tileRow 编号和tileCol 编号来标识。这三个元素仅在与 TileMatrixSet 描述相关联时才有意义，该描述包含将索引转换为已知 CRS 中的坐标所需的信息（以scaleDenominator、cellSize、pointOfOrigin 和cornerOfOrigin 的形式）。 TileSet Metadata 的主要目的是将 TileSet 与 TileMatrixSet 描述链接起来。此外，该模型还包含描述 TileSet 主要特征的元素，保留从 TileSet 到原始数据集合和样式的连接以及开始导航的推荐中心点。
 
->💡 其实，我认为这个和[TileJson](https://github.com/mapbox/tilejson-spec/tree/master)的目的一致，给出TileSet的描述与限制。
+>💡 其实，我认为这个和[TileJson](https://github.com/mapbox/tilejson-spec/tree/master)的目的一致，即给出TileSet的描述与限制。
 
 ### TileMatrixSet limits
 
@@ -331,7 +336,7 @@ well-known combination of a coordinate reference system and a set of scales that
 
 ![tilematrixset-limits](https://zhou-fuyi.github.io/picx-images-hosting/tilematrixset-limits.8vmsgf7oan.webp)
 
->💡 其实这里就解释了GeoWebCache中GridSet和GridSubset的关系，同时这就对应了GeoServer中404的响应，GeoServer通过此法可以避免大量无效的请求打到数据库（缓存或数据源），也在一定层度上提高了系统整体的安全性。但是此法有个缺点：就是需要提前确定数据源的范围（BoundingBox，GeoServer会读取数据的MBR范围并缓存）。当然，我们可以手动的设置该范围，而不是每次都从数据库进行获取，或者是周期性的更新该范围。总而言之，我觉得利是大于弊的，可以通过一些其他的手段进行优化。
+>💡 其实这里就解释了GeoWebCache中GridSet和GridSubset的关系，同时这就对应了GeoServer中404的响应，GeoServer通过此法可以避免大量无效的请求打到数据库（缓存或数据源），也在一定程度上提高了系统整体的安全性。但是此法有个缺点：就是需要提前确定数据源的范围（BoundingBox，GeoServer会读取数据的MBR范围并缓存）。当然，我们可以手动的设置该范围，而不是每次都从数据库进行获取，或者是周期性的更新该范围。总而言之，我觉得利是大于弊的，可以通过一些其他的手段进行优化。
 
 ### TileSetMetadata requirements class
 
@@ -394,6 +399,27 @@ well-known combination of a coordinate reference system and a set of scales that
 > 对于许多栅格和矢量切片格式，CRS84 和 EPSG:4326 是等效的，因为强制执行特定的轴顺序。 例如，API 的附加参数还可以通过将 CRS 指定为 CRS84 或 EPSG:4326 来覆盖默认轴顺序。
 >
 > ps：其实这两种都是 基于WGS84经纬度投影的切片方案，唯一的差异就是轴顺序的问题。国内使用肯定是选择经度优先的使用，也就是经度、纬度顺序的表示。
+>
+> ps：在GeoTools中可以如此使用以引入CRS84：CRS.decode("CRS:84");
+>GEOGCS["WGS84", 
+>
+>  DATUM["WGS84", 
+>
+>    SPHEROID["WGS84", 6378137.0, 298.257223563]], 
+>
+>  PRIMEM["Greenwich", 0.0], 
+>
+>  UNIT["degree", 0.017453292519943295], 
+>
+>  AXIS["Geodetic longitude", EAST], 
+>
+>  AXIS["Geodetic latitude", NORTH], 
+>
+>  AUTHORITY["Web Map Service CRS","84"]]
+>
+> 当然，你也可以这样引入：CRS.decode("EPSG:4326", true); 可以指定轴顺序。或者是在全局指定轴顺序：System.setProperty("org.geotools.referencing.forceXY", "true"); 参考：[GeoTools Axis Order](https://docs.geotools.org/maintenance/userguide/library/referencing/order.html)
+>
+> 更多信息请参考GeoTools，且应以官方所述为主。
 
 #### WorldMercatorWGS84Quad
 
@@ -405,7 +431,7 @@ well-known combination of a coordinate reference system and a set of scales that
 
 ![WorldMercatorWGS84Quad-4](https://zhou-fuyi.github.io/picx-images-hosting/WorldMercatorWGS84Quad-4.8dwqrx4aop.webp)
 
->💡 美国国防部 (DoD) 下属的国家地理空间情报局 (NGA) 测绘办公室提醒公众在所有关键任务活动中使用国防部批准的 1984 年世界大地测量系统 (WGS 84) 应用程序，并鼓励使用像这样的（WorldMercatorWGS84Quad）基于 WGS84 的切片矩阵集，并阻止使用基于 Web 墨卡托的 Web 墨卡托切片，例如 WebMercatorQuad。
+>💡 美国国防部 (DoD) 下属的国家地理空间情报局 (NGA) 测绘办公室提醒公众在所有关键任务活动中使用国防部批准的 1984 年世界大地测量系统 (WGS 84) 应用程序，并鼓励使用像这样的（WorldMercatorWGS84Quad）基于 WGS84 的切片矩阵集，并阻止使用基于 Web 墨卡托的 Web 墨卡托瓦片矩阵集，例如 WebMercatorQuad。
 >
 >NGA 测绘办公室建议使用通用缩放级别比例集，该比例集定义为纬度 +-31.0606963703645 处的真实像元大小，这意味着赤道处的比例缩小了 0.857385503731176。为方便起见，本标准建议在赤道处使用比例分母。
 
@@ -419,11 +445,11 @@ well-known combination of a coordinate reference system and a set of scales that
 
 ![PSEUDOCODE-1](https://zhou-fuyi.github.io/picx-images-hosting/PSEUDOCODE-1.7egner4jyd.webp)
 
-要获取覆盖此边界框的所有图块，客户端将扫描从tileMinCol到tileMaxCol以及从tileMinRow到tileMaxRow（全部包含在内）。总共将获取 (tileMaxCol -tileMinCol + 1) x (tileMaxRow -tileMinRow + 1)。
+要获取覆盖此边界框的所有瓦片，客户端将扫描从tileMinCol到tileMaxCol以及从tileMinRow到tileMaxRow（全部包含在内）。总共将获取 (tileMaxCol -tileMinCol + 1) x (tileMaxRow -tileMinRow + 1)。
 
 #### 从瓦片索引到 BBOX
 
-以下伪代码可用于将一对瓦片索引（tileCol、tileRow）转换为由图块左上角（leftX、upperY）定义的此图块的边界框（以 CRS 坐标表示）：
+以下伪代码可用于将一对瓦片索引（tileCol、tileRow）转换为由瓦片左上角（leftX、upperY）定义的此瓦片的边界框（以 CRS 坐标表示）：
 
 ![PSEUDOCODE-2](https://zhou-fuyi.github.io/picx-images-hosting/PSEUDOCODE-2.wiflftkp0.webp)
 
