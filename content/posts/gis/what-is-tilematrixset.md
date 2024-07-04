@@ -232,8 +232,6 @@ well-known combination of a coordinate reference system and a set of scales that
 ![tile-space-1](https://zhou-fuyi.github.io/picx-images-hosting/tile-space-1.1021j1itu3.webp)
 
 >💡 metersPerUnit (crs)： 将坐标参考系统 (CRS) 单位转换为米的系数。也就是说，这个参数表示的是将给定的CRS中一个单位转换为米的系数。换句话说，也就是在指定的CRS中，一个单位表示多少米。目前常用的就两种投影，一是以米为单位的（即metersPerUnit为1）；其次是以度为单位的经纬度投影（metersPerUnit表示为1度代表多少米，即：360/赤道周长，不同CRS使用不同的椭球体，所以其赤道周长也会存在一定差异。）例如，WGS84 metersPerUnit (crs) 为 111319.4908 米/度。
->
->注：此处是将地球椭球体视为正球体进行计算的
 
 ![tile-space-2](https://zhou-fuyi.github.io/picx-images-hosting/tile-space-2.wiflbpr4a.webp)
 
