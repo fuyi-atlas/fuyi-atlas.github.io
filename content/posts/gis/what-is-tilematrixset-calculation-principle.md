@@ -20,7 +20,7 @@ tags:
 
 ## Gridset & TileMatrixSet
 
-这里就不再对GeoWebCache做介绍了，直接切入主体。GeoWebCache中的Gridset正是对应着TileMatrixSet模型，我们先来看一下[GeoWebCache对于Gridset的相关介绍](https://geowebcache.osgeo.org/docs/current/concepts/gridsets.html)：
+这里就不再对GeoWebCache做介绍了，直接切入主题。GeoWebCache中的Gridset正是对应着TileMatrixSet模型，我们先来看一下[GeoWebCache对于Gridset的相关介绍](https://geowebcache.osgeo.org/docs/current/concepts/gridsets.html)：
 
 ### **Gridsets and Gridsubsets**
 
@@ -71,7 +71,7 @@ gridsubset 是特定于图层的，这是因为其代表着数据的真实范围
 
 - The gridset for the layer
     
-    其实，Gridset 和 Gridsubset 通常时成对出现的，若有子集则必要原集，但Gridset是可以单独存在的。这两是在同一投影坐标系下，相同尺度分级下、不同BBox（BBox的关系是包含与被包含的关系）的TileMatrixSet实现，只不过 Gridsubset 基本作为辅助元素。
+    其实，Gridset 和 Gridsubset 通常是成对出现的，若有子集则必有原集，但Gridset是可以单独存在的。这两是在同一投影坐标系下，相同尺度分级下、不同BBox（BBox的关系是包含与被包含的关系）的TileMatrixSet实现，只不过 Gridsubset 基本作为辅助元素。
     
 - (Optional) The bounding box for that layer (which must be a subset of the extent of the gridSet)
     
@@ -378,7 +378,7 @@ matrixWidth=4.007501668557849E7/(256*4891.96981025128)=32
 matrixHigh=4.007501668557849E7/(256*4891.96981025128)=32
 ```
 
-经过在此对比，可确定此计算与天地图以及电子地图规范中的地图分级数据一致。且已经完成格网划分动作，是的，其实就是这么简单。确定好参数后，直接进行矩阵构建（格网划分）就好了（矩阵宽，高计算）。
+经过再次对比，可确定此计算与天地图以及电子地图规范中的地图分级数据一致。且已经完成格网划分动作，是的，其实就是这么简单。确定好参数后，直接进行矩阵构建（格网划分）就好了（矩阵宽，高计算）。
 
 如果你需要从范围去计算比例分级的话，需要注意的，本次给定的范围是比较特殊的，是相当规整的，因为Web墨卡托的投影面结果是一个正方形的平面区域。所以对于方形瓦片来说，其在正方形的区域下横纵方向的分辨率是一致的。如果给定的区域是长方形或者其他的形状，则可能需要进行一定的范围调整，以保证方形瓦片在横纵方向上的分辨率是统一的，同时矩阵在横纵方向上数量是整数（整除的）。
 
