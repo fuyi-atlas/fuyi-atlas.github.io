@@ -1,0 +1,848 @@
+<!DOCTYPE html>
+<html lang="en" dir="auto">
+
+<head><meta charset="utf-8">
+<meta http-equiv="X-UA-Compatible" content="IE=edge">
+<meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
+<meta name="robots" content="index, follow">
+<title>如何构建一个矢量瓦片服务 | Fuyi Atlas</title>
+<meta name="keywords" content="vector tile, service">
+<meta name="description" content="前言 关于矢量瓦片（节选） 地图瓦片技术是在线地图服务常用的瓦片技术，瓦片就是地图瓦片的具体存储形态，提前切好的瓦片可以大大提高在线地图的访问效率。
+栅格瓦片 以图片为介质的栅格瓦片使得在线地图得以迅速普及，优势在于显示效率高、方便传输。但是，随着地图的移动化和应用的逐渐深入，栅格瓦片占用带宽和存储都较大，不利于地图在移动设备的应用。
+矢量瓦片 矢量瓦片的产生弥补了栅格瓦片的不足。矢量瓦片数据以矢量形式存在。矢量瓦片体积下，可高度压缩，占用的存储空间比栅格瓦片要小上千倍。数据传输体量小，地图更新的代价小
+常见的矢量瓦片制作工具（节选） 目前开源的矢量切片工具还是非常多的，列出一些主流的阐述下：
+基于GeoServer的矢量切片插件，适合熟悉GeoServer的用户，操作还比较简单，缺点是切片的行列号与一般的XYZ编号不同不容易单独部署。 基于tippecanoe的矢量切片工具方案，该工具提供了很多高级功能在数据定制化上有很强的优势，但只能部署在Linux，并不是跨平台，只能读取geojson文件，不能直连数据库，不是很好，如果有幸您是c&#43;&#43;开发大神，可以改下库的编译绑定平台，使其支持windows，再更改下数据源底层，使其能支持空间数据库，那么该工具会有更多的应用空间。 基于PostGIS的矢量切片方案，该方案在熟悉PostGIS的用户中应该很受欢迎，优势是支持动态矢量切片，有PG社区的系统级加成。 总的来说，工具虽然很多，但是没有一款可以说覆盖一切场景的，具体应用还是看场景的，比如前两个方案都是做底图数据时比较有用，都是静态矢量切片方案，geoserver能直连数据库，tippecanoe有强数据定制性要求，那么如果用户侧重点是简单点的话geoserver够了，用户侧重点是希望对数据做很多高级过滤什么的操作用tippecanoe，但步骤麻烦点。这些矢量切片工具仅仅在处理很久不变的数据，就是切一次用很久的数据，如果数据频繁变化，这种静态数据切片工具就很不好用了。
+与其他方案相比，PostGIS方案的好处主要有两大点：
+资源开销低：空间数据一般存空间数据库中，传统工具会先从数据库中捞数据，这个数据通常很大，网络开销和服务器端内存都要很大，查询慢计算慢是肯定的。而PostGIS是在数据库中把数据处理完，只把结果传给后台转前台，可以很方便的使用数据库的索引，并行计算等，优化查询和处理速度。 动态矢量切片，数据时效性高：每当根据xyz请求时，数据库会动态查询范围内数据，裁剪简化并输出pbf格式的二进制数据出去，在数据变化频繁的场景下，可以保证用户看到的是最新的数据。 💡 GeoServer、Tippecanoe 皆为静态矢量切片方案，需提前准备切片数据，并进行持久化（GeoServer也可以在使用时进行切片，同时进行持久化）。PostGIS支持动态矢量切片方案，即实时计算生成切片，且不进行切片的持久化。
+为什么要自己写一个服务 于我个人而言，我目前仅接触和使用到了GeoServer，且对其中的实现细节并不太清楚，所以想通过参考模仿的方式实现一个示例服务。其次，还想测试在没有如GeoWebcache此类的瓦片缓存的情况下，服务的性能如何。综上所述，其实也就是为了如下这几方面的目的：
+学习，了解其中的实现细节
+更好的适配
+比如说，WMTS服务很明确存在缓存，WMS性能又不够好。如果使用WMTS服务确实可以提升服务的性能，但是对于源数据存在编辑的场景下，缓存问题还是会让人头疼。
+那么是否存在动态的矢量瓦片服务？既能解决缓存的问题，同时还没有太大的性能问题。
+你或许会提到基于PostGIS的动态矢量瓦片服务，但是有些历史的原因，短时间内没有变法变更数据库。当然也可以基于类如CDC这样的功能进行缓存的更新，但其实还是会存在缓存的问题，只是说可以通过一些手段降低缓存问题出现的概率，并无法从根本上解决问题
+所以，基于此，既然PostGIS可以实现动态矢量瓦片服务，我们自然也可以。公瑾大佬曾发文说过，当下地图服务去服务化、数据不切片基本上已经是必然的趋势，那么我为什么还要去做一个服务化的东西。大概就是下面这几个原因了：
+数据库技术，在某些特定的因素下，短时间内无法切换到PostGIS 数据量级 性能容忍度 小厂，我不思进取 🙄 后续知识储备 矢量瓦片标准 参见：矢量瓦片标准
+在这里贴几个关键点（对于目前使用上来说）：
+文件格式
+矢量瓦片文件采用Google Protocol Buffers进行编码。Google Protocol Buffers是一种兼容多语言、多平台、易扩展的数据序列化格式。
+投影和范围
+矢量瓦片表示的是投影在正方形区块上的数据。矢量瓦片不应该包含范围和投影信息。解码方被假定知道矢量瓦片的范围和投影信息。
+Web Mercator是默认的投影方式，Google tile scheme是默认的瓦片编号方式。两者一起完成了与任意范围、任意精度的地理区域的一一对应，例如https://example.com/17/65535/43602.mvt。
+矢量瓦片可以用来表示任意投影方式、任意瓦片编号方案的数据。
+内部结构
+图层
+每块矢量瓦片应该至少包含一个图层。每个图层应该至少包含一个要素。
+几何图形编码
+矢量瓦片中的几何数据被定义为屏幕坐标系。瓦片的左上角（显示默认如此）是坐标系的原点。X轴向右为正，Y轴向下为正。几何图形中的坐标必须为整数。
+矢量瓦片服务构建 在这里，我选择抄GeoServer的作业。众所周知，PostGIS是开源的，那为什么没有选择抄PostGIS的作业呢？
+当下水平不够 想快速验证想法 想基于GeoServer做二次开发，或者说是基于现存的地图服务相关的实现，集各家之大成，合并成一个组在功能上可自由搭配的、较高性能服务端组件 接着说当前的事情。要实现一个动态矢量瓦片服务，我们需要先分析一下实现内容，在此先做出如下拆解：
+动态矢量瓦片服务可以理解为没有瓦片缓存的，实时生成的矢量瓦片服务，所以核心还是矢量瓦片服务(@time 20210503: 动态矢量瓦片技术是相对矢量瓦片技术提出的，而矢量瓦片技术的大规模应用还是以预切为主，所以动态矢量瓦片要解决的是不再预切动态生成，同时避免一下子生成大规模瓦片文件的问题) 矢量瓦片服务也就是根据调用端传递的参数，从数据源获取对应的数据，并将其转换为矢量瓦片格式，最终返回给调用端 这里选择瓦片坐标作为检索参数，可以便于服务降级（缓存）和性能优化（瓦片坐标值相对来说更加准确和可固定，且便于降维） 需要实现瓦片坐标系到数据源坐标系下数据范围的相互转换 需要实现数据源的范围查询 需要实现矢量数据到矢量瓦片的编解码 那么大体的实现路径可归结于如下所示：
+其中的核心要点总结如下：">
+<meta name="author" content="Fuyi">
+<link rel="canonical" href="https://fuyi-atlas.github.io/posts/program/map/how-to-build-a-vector-tile-service/">
+<link crossorigin="anonymous" href="/assets/css/stylesheet.a61ecc0df414536d559b3d0ca421e2b1de8f39b8a4910b32fedccecbc2c0d59c.css" integrity="sha256-ph7MDfQUU21Vmz0MpCHisd6PObikkQsy/tzOy8LA1Zw=" rel="preload stylesheet" as="style">
+<link rel="icon" href="https://fuyi-atlas.github.io/favicon.ico">
+<link rel="icon" type="image/png" sizes="16x16" href="https://fuyi-atlas.github.io/favicon-16x16.png">
+<link rel="icon" type="image/png" sizes="32x32" href="https://fuyi-atlas.github.io/favicon-32x32.png">
+<link rel="apple-touch-icon" href="https://fuyi-atlas.github.io/apple-touch-icon.png">
+<link rel="mask-icon" href="https://fuyi-atlas.github.io/safari-pinned-tab.svg">
+<meta name="theme-color" content="#2e2e33">
+<meta name="msapplication-TileColor" content="#2e2e33">
+<link rel="alternate" hreflang="en" href="https://fuyi-atlas.github.io/posts/program/map/how-to-build-a-vector-tile-service/">
+<noscript>
+    <style>
+        #theme-toggle,
+        .top-link {
+            display: none;
+        }
+
+    </style>
+    <style>
+        @media (prefers-color-scheme: dark) {
+            :root {
+                --theme: rgb(29, 30, 32);
+                --entry: rgb(46, 46, 51);
+                --primary: rgb(218, 218, 219);
+                --secondary: rgb(155, 156, 157);
+                --tertiary: rgb(65, 66, 68);
+                --content: rgb(196, 196, 197);
+                --code-block-bg: rgb(46, 46, 51);
+                --code-bg: rgb(55, 56, 62);
+                --border: rgb(51, 51, 51);
+            }
+
+            .list {
+                background: var(--theme);
+            }
+
+            .list:not(.dark)::-webkit-scrollbar-track {
+                background: 0 0;
+            }
+
+            .list:not(.dark)::-webkit-scrollbar-thumb {
+                border-color: var(--theme);
+            }
+        }
+
+    </style>
+</noscript><meta property="og:title" content="如何构建一个矢量瓦片服务" />
+<meta property="og:description" content="前言 关于矢量瓦片（节选） 地图瓦片技术是在线地图服务常用的瓦片技术，瓦片就是地图瓦片的具体存储形态，提前切好的瓦片可以大大提高在线地图的访问效率。
+栅格瓦片 以图片为介质的栅格瓦片使得在线地图得以迅速普及，优势在于显示效率高、方便传输。但是，随着地图的移动化和应用的逐渐深入，栅格瓦片占用带宽和存储都较大，不利于地图在移动设备的应用。
+矢量瓦片 矢量瓦片的产生弥补了栅格瓦片的不足。矢量瓦片数据以矢量形式存在。矢量瓦片体积下，可高度压缩，占用的存储空间比栅格瓦片要小上千倍。数据传输体量小，地图更新的代价小
+常见的矢量瓦片制作工具（节选） 目前开源的矢量切片工具还是非常多的，列出一些主流的阐述下：
+基于GeoServer的矢量切片插件，适合熟悉GeoServer的用户，操作还比较简单，缺点是切片的行列号与一般的XYZ编号不同不容易单独部署。 基于tippecanoe的矢量切片工具方案，该工具提供了很多高级功能在数据定制化上有很强的优势，但只能部署在Linux，并不是跨平台，只能读取geojson文件，不能直连数据库，不是很好，如果有幸您是c&#43;&#43;开发大神，可以改下库的编译绑定平台，使其支持windows，再更改下数据源底层，使其能支持空间数据库，那么该工具会有更多的应用空间。 基于PostGIS的矢量切片方案，该方案在熟悉PostGIS的用户中应该很受欢迎，优势是支持动态矢量切片，有PG社区的系统级加成。 总的来说，工具虽然很多，但是没有一款可以说覆盖一切场景的，具体应用还是看场景的，比如前两个方案都是做底图数据时比较有用，都是静态矢量切片方案，geoserver能直连数据库，tippecanoe有强数据定制性要求，那么如果用户侧重点是简单点的话geoserver够了，用户侧重点是希望对数据做很多高级过滤什么的操作用tippecanoe，但步骤麻烦点。这些矢量切片工具仅仅在处理很久不变的数据，就是切一次用很久的数据，如果数据频繁变化，这种静态数据切片工具就很不好用了。
+与其他方案相比，PostGIS方案的好处主要有两大点：
+资源开销低：空间数据一般存空间数据库中，传统工具会先从数据库中捞数据，这个数据通常很大，网络开销和服务器端内存都要很大，查询慢计算慢是肯定的。而PostGIS是在数据库中把数据处理完，只把结果传给后台转前台，可以很方便的使用数据库的索引，并行计算等，优化查询和处理速度。 动态矢量切片，数据时效性高：每当根据xyz请求时，数据库会动态查询范围内数据，裁剪简化并输出pbf格式的二进制数据出去，在数据变化频繁的场景下，可以保证用户看到的是最新的数据。 💡 GeoServer、Tippecanoe 皆为静态矢量切片方案，需提前准备切片数据，并进行持久化（GeoServer也可以在使用时进行切片，同时进行持久化）。PostGIS支持动态矢量切片方案，即实时计算生成切片，且不进行切片的持久化。
+为什么要自己写一个服务 于我个人而言，我目前仅接触和使用到了GeoServer，且对其中的实现细节并不太清楚，所以想通过参考模仿的方式实现一个示例服务。其次，还想测试在没有如GeoWebcache此类的瓦片缓存的情况下，服务的性能如何。综上所述，其实也就是为了如下这几方面的目的：
+学习，了解其中的实现细节
+更好的适配
+比如说，WMTS服务很明确存在缓存，WMS性能又不够好。如果使用WMTS服务确实可以提升服务的性能，但是对于源数据存在编辑的场景下，缓存问题还是会让人头疼。
+那么是否存在动态的矢量瓦片服务？既能解决缓存的问题，同时还没有太大的性能问题。
+你或许会提到基于PostGIS的动态矢量瓦片服务，但是有些历史的原因，短时间内没有变法变更数据库。当然也可以基于类如CDC这样的功能进行缓存的更新，但其实还是会存在缓存的问题，只是说可以通过一些手段降低缓存问题出现的概率，并无法从根本上解决问题
+所以，基于此，既然PostGIS可以实现动态矢量瓦片服务，我们自然也可以。公瑾大佬曾发文说过，当下地图服务去服务化、数据不切片基本上已经是必然的趋势，那么我为什么还要去做一个服务化的东西。大概就是下面这几个原因了：
+数据库技术，在某些特定的因素下，短时间内无法切换到PostGIS 数据量级 性能容忍度 小厂，我不思进取 🙄 后续知识储备 矢量瓦片标准 参见：矢量瓦片标准
+在这里贴几个关键点（对于目前使用上来说）：
+文件格式
+矢量瓦片文件采用Google Protocol Buffers进行编码。Google Protocol Buffers是一种兼容多语言、多平台、易扩展的数据序列化格式。
+投影和范围
+矢量瓦片表示的是投影在正方形区块上的数据。矢量瓦片不应该包含范围和投影信息。解码方被假定知道矢量瓦片的范围和投影信息。
+Web Mercator是默认的投影方式，Google tile scheme是默认的瓦片编号方式。两者一起完成了与任意范围、任意精度的地理区域的一一对应，例如https://example.com/17/65535/43602.mvt。
+矢量瓦片可以用来表示任意投影方式、任意瓦片编号方案的数据。
+内部结构
+图层
+每块矢量瓦片应该至少包含一个图层。每个图层应该至少包含一个要素。
+几何图形编码
+矢量瓦片中的几何数据被定义为屏幕坐标系。瓦片的左上角（显示默认如此）是坐标系的原点。X轴向右为正，Y轴向下为正。几何图形中的坐标必须为整数。
+矢量瓦片服务构建 在这里，我选择抄GeoServer的作业。众所周知，PostGIS是开源的，那为什么没有选择抄PostGIS的作业呢？
+当下水平不够 想快速验证想法 想基于GeoServer做二次开发，或者说是基于现存的地图服务相关的实现，集各家之大成，合并成一个组在功能上可自由搭配的、较高性能服务端组件 接着说当前的事情。要实现一个动态矢量瓦片服务，我们需要先分析一下实现内容，在此先做出如下拆解：
+动态矢量瓦片服务可以理解为没有瓦片缓存的，实时生成的矢量瓦片服务，所以核心还是矢量瓦片服务(@time 20210503: 动态矢量瓦片技术是相对矢量瓦片技术提出的，而矢量瓦片技术的大规模应用还是以预切为主，所以动态矢量瓦片要解决的是不再预切动态生成，同时避免一下子生成大规模瓦片文件的问题) 矢量瓦片服务也就是根据调用端传递的参数，从数据源获取对应的数据，并将其转换为矢量瓦片格式，最终返回给调用端 这里选择瓦片坐标作为检索参数，可以便于服务降级（缓存）和性能优化（瓦片坐标值相对来说更加准确和可固定，且便于降维） 需要实现瓦片坐标系到数据源坐标系下数据范围的相互转换 需要实现数据源的范围查询 需要实现矢量数据到矢量瓦片的编解码 那么大体的实现路径可归结于如下所示：
+其中的核心要点总结如下：" />
+<meta property="og:type" content="article" />
+<meta property="og:url" content="https://fuyi-atlas.github.io/posts/program/map/how-to-build-a-vector-tile-service/" /><meta property="article:section" content="posts" />
+<meta property="article:published_time" content="2023-05-23T22:46:59+08:00" />
+<meta property="article:modified_time" content="2023-05-23T22:46:59+08:00" />
+
+<meta name="twitter:card" content="summary"/>
+<meta name="twitter:title" content="如何构建一个矢量瓦片服务"/>
+<meta name="twitter:description" content="前言 关于矢量瓦片（节选） 地图瓦片技术是在线地图服务常用的瓦片技术，瓦片就是地图瓦片的具体存储形态，提前切好的瓦片可以大大提高在线地图的访问效率。
+栅格瓦片 以图片为介质的栅格瓦片使得在线地图得以迅速普及，优势在于显示效率高、方便传输。但是，随着地图的移动化和应用的逐渐深入，栅格瓦片占用带宽和存储都较大，不利于地图在移动设备的应用。
+矢量瓦片 矢量瓦片的产生弥补了栅格瓦片的不足。矢量瓦片数据以矢量形式存在。矢量瓦片体积下，可高度压缩，占用的存储空间比栅格瓦片要小上千倍。数据传输体量小，地图更新的代价小
+常见的矢量瓦片制作工具（节选） 目前开源的矢量切片工具还是非常多的，列出一些主流的阐述下：
+基于GeoServer的矢量切片插件，适合熟悉GeoServer的用户，操作还比较简单，缺点是切片的行列号与一般的XYZ编号不同不容易单独部署。 基于tippecanoe的矢量切片工具方案，该工具提供了很多高级功能在数据定制化上有很强的优势，但只能部署在Linux，并不是跨平台，只能读取geojson文件，不能直连数据库，不是很好，如果有幸您是c&#43;&#43;开发大神，可以改下库的编译绑定平台，使其支持windows，再更改下数据源底层，使其能支持空间数据库，那么该工具会有更多的应用空间。 基于PostGIS的矢量切片方案，该方案在熟悉PostGIS的用户中应该很受欢迎，优势是支持动态矢量切片，有PG社区的系统级加成。 总的来说，工具虽然很多，但是没有一款可以说覆盖一切场景的，具体应用还是看场景的，比如前两个方案都是做底图数据时比较有用，都是静态矢量切片方案，geoserver能直连数据库，tippecanoe有强数据定制性要求，那么如果用户侧重点是简单点的话geoserver够了，用户侧重点是希望对数据做很多高级过滤什么的操作用tippecanoe，但步骤麻烦点。这些矢量切片工具仅仅在处理很久不变的数据，就是切一次用很久的数据，如果数据频繁变化，这种静态数据切片工具就很不好用了。
+与其他方案相比，PostGIS方案的好处主要有两大点：
+资源开销低：空间数据一般存空间数据库中，传统工具会先从数据库中捞数据，这个数据通常很大，网络开销和服务器端内存都要很大，查询慢计算慢是肯定的。而PostGIS是在数据库中把数据处理完，只把结果传给后台转前台，可以很方便的使用数据库的索引，并行计算等，优化查询和处理速度。 动态矢量切片，数据时效性高：每当根据xyz请求时，数据库会动态查询范围内数据，裁剪简化并输出pbf格式的二进制数据出去，在数据变化频繁的场景下，可以保证用户看到的是最新的数据。 💡 GeoServer、Tippecanoe 皆为静态矢量切片方案，需提前准备切片数据，并进行持久化（GeoServer也可以在使用时进行切片，同时进行持久化）。PostGIS支持动态矢量切片方案，即实时计算生成切片，且不进行切片的持久化。
+为什么要自己写一个服务 于我个人而言，我目前仅接触和使用到了GeoServer，且对其中的实现细节并不太清楚，所以想通过参考模仿的方式实现一个示例服务。其次，还想测试在没有如GeoWebcache此类的瓦片缓存的情况下，服务的性能如何。综上所述，其实也就是为了如下这几方面的目的：
+学习，了解其中的实现细节
+更好的适配
+比如说，WMTS服务很明确存在缓存，WMS性能又不够好。如果使用WMTS服务确实可以提升服务的性能，但是对于源数据存在编辑的场景下，缓存问题还是会让人头疼。
+那么是否存在动态的矢量瓦片服务？既能解决缓存的问题，同时还没有太大的性能问题。
+你或许会提到基于PostGIS的动态矢量瓦片服务，但是有些历史的原因，短时间内没有变法变更数据库。当然也可以基于类如CDC这样的功能进行缓存的更新，但其实还是会存在缓存的问题，只是说可以通过一些手段降低缓存问题出现的概率，并无法从根本上解决问题
+所以，基于此，既然PostGIS可以实现动态矢量瓦片服务，我们自然也可以。公瑾大佬曾发文说过，当下地图服务去服务化、数据不切片基本上已经是必然的趋势，那么我为什么还要去做一个服务化的东西。大概就是下面这几个原因了：
+数据库技术，在某些特定的因素下，短时间内无法切换到PostGIS 数据量级 性能容忍度 小厂，我不思进取 🙄 后续知识储备 矢量瓦片标准 参见：矢量瓦片标准
+在这里贴几个关键点（对于目前使用上来说）：
+文件格式
+矢量瓦片文件采用Google Protocol Buffers进行编码。Google Protocol Buffers是一种兼容多语言、多平台、易扩展的数据序列化格式。
+投影和范围
+矢量瓦片表示的是投影在正方形区块上的数据。矢量瓦片不应该包含范围和投影信息。解码方被假定知道矢量瓦片的范围和投影信息。
+Web Mercator是默认的投影方式，Google tile scheme是默认的瓦片编号方式。两者一起完成了与任意范围、任意精度的地理区域的一一对应，例如https://example.com/17/65535/43602.mvt。
+矢量瓦片可以用来表示任意投影方式、任意瓦片编号方案的数据。
+内部结构
+图层
+每块矢量瓦片应该至少包含一个图层。每个图层应该至少包含一个要素。
+几何图形编码
+矢量瓦片中的几何数据被定义为屏幕坐标系。瓦片的左上角（显示默认如此）是坐标系的原点。X轴向右为正，Y轴向下为正。几何图形中的坐标必须为整数。
+矢量瓦片服务构建 在这里，我选择抄GeoServer的作业。众所周知，PostGIS是开源的，那为什么没有选择抄PostGIS的作业呢？
+当下水平不够 想快速验证想法 想基于GeoServer做二次开发，或者说是基于现存的地图服务相关的实现，集各家之大成，合并成一个组在功能上可自由搭配的、较高性能服务端组件 接着说当前的事情。要实现一个动态矢量瓦片服务，我们需要先分析一下实现内容，在此先做出如下拆解：
+动态矢量瓦片服务可以理解为没有瓦片缓存的，实时生成的矢量瓦片服务，所以核心还是矢量瓦片服务(@time 20210503: 动态矢量瓦片技术是相对矢量瓦片技术提出的，而矢量瓦片技术的大规模应用还是以预切为主，所以动态矢量瓦片要解决的是不再预切动态生成，同时避免一下子生成大规模瓦片文件的问题) 矢量瓦片服务也就是根据调用端传递的参数，从数据源获取对应的数据，并将其转换为矢量瓦片格式，最终返回给调用端 这里选择瓦片坐标作为检索参数，可以便于服务降级（缓存）和性能优化（瓦片坐标值相对来说更加准确和可固定，且便于降维） 需要实现瓦片坐标系到数据源坐标系下数据范围的相互转换 需要实现数据源的范围查询 需要实现矢量数据到矢量瓦片的编解码 那么大体的实现路径可归结于如下所示：
+其中的核心要点总结如下："/>
+
+
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "BreadcrumbList",
+  "itemListElement": [
+    {
+      "@type": "ListItem",
+      "position":  1 ,
+      "name": "Posts",
+      "item": "https://fuyi-atlas.github.io/posts/"
+    }, 
+    {
+      "@type": "ListItem",
+      "position":  2 ,
+      "name": "如何构建一个矢量瓦片服务",
+      "item": "https://fuyi-atlas.github.io/posts/program/map/how-to-build-a-vector-tile-service/"
+    }
+  ]
+}
+</script>
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "BlogPosting",
+  "headline": "如何构建一个矢量瓦片服务",
+  "name": "如何构建一个矢量瓦片服务",
+  "description": "前言 关于矢量瓦片（节选） 地图瓦片技术是在线地图服务常用的瓦片技术，瓦片就是地图瓦片的具体存储形态，提前切好的瓦片可以大大提高在线地图的访问效率。\n栅格瓦片 以图片为介质的栅格瓦片使得在线地图得以迅速普及，优势在于显示效率高、方便传输。但是，随着地图的移动化和应用的逐渐深入，栅格瓦片占用带宽和存储都较大，不利于地图在移动设备的应用。\n矢量瓦片 矢量瓦片的产生弥补了栅格瓦片的不足。矢量瓦片数据以矢量形式存在。矢量瓦片体积下，可高度压缩，占用的存储空间比栅格瓦片要小上千倍。数据传输体量小，地图更新的代价小\n常见的矢量瓦片制作工具（节选） 目前开源的矢量切片工具还是非常多的，列出一些主流的阐述下：\n基于GeoServer的矢量切片插件，适合熟悉GeoServer的用户，操作还比较简单，缺点是切片的行列号与一般的XYZ编号不同不容易单独部署。 基于tippecanoe的矢量切片工具方案，该工具提供了很多高级功能在数据定制化上有很强的优势，但只能部署在Linux，并不是跨平台，只能读取geojson文件，不能直连数据库，不是很好，如果有幸您是c++开发大神，可以改下库的编译绑定平台，使其支持windows，再更改下数据源底层，使其能支持空间数据库，那么该工具会有更多的应用空间。 基于PostGIS的矢量切片方案，该方案在熟悉PostGIS的用户中应该很受欢迎，优势是支持动态矢量切片，有PG社区的系统级加成。 总的来说，工具虽然很多，但是没有一款可以说覆盖一切场景的，具体应用还是看场景的，比如前两个方案都是做底图数据时比较有用，都是静态矢量切片方案，geoserver能直连数据库，tippecanoe有强数据定制性要求，那么如果用户侧重点是简单点的话geoserver够了，用户侧重点是希望对数据做很多高级过滤什么的操作用tippecanoe，但步骤麻烦点。这些矢量切片工具仅仅在处理很久不变的数据，就是切一次用很久的数据，如果数据频繁变化，这种静态数据切片工具就很不好用了。\n与其他方案相比，PostGIS方案的好处主要有两大点：\n资源开销低：空间数据一般存空间数据库中，传统工具会先从数据库中捞数据，这个数据通常很大，网络开销和服务器端内存都要很大，查询慢计算慢是肯定的。而PostGIS是在数据库中把数据处理完，只把结果传给后台转前台，可以很方便的使用数据库的索引，并行计算等，优化查询和处理速度。 动态矢量切片，数据时效性高：每当根据xyz请求时，数据库会动态查询范围内数据，裁剪简化并输出pbf格式的二进制数据出去，在数据变化频繁的场景下，可以保证用户看到的是最新的数据。 💡 GeoServer、Tippecanoe 皆为静态矢量切片方案，需提前准备切片数据，并进行持久化（GeoServer也可以在使用时进行切片，同时进行持久化）。PostGIS支持动态矢量切片方案，即实时计算生成切片，且不进行切片的持久化。\n为什么要自己写一个服务 于我个人而言，我目前仅接触和使用到了GeoServer，且对其中的实现细节并不太清楚，所以想通过参考模仿的方式实现一个示例服务。其次，还想测试在没有如GeoWebcache此类的瓦片缓存的情况下，服务的性能如何。综上所述，其实也就是为了如下这几方面的目的：\n学习，了解其中的实现细节\n更好的适配\n比如说，WMTS服务很明确存在缓存，WMS性能又不够好。如果使用WMTS服务确实可以提升服务的性能，但是对于源数据存在编辑的场景下，缓存问题还是会让人头疼。\n那么是否存在动态的矢量瓦片服务？既能解决缓存的问题，同时还没有太大的性能问题。\n你或许会提到基于PostGIS的动态矢量瓦片服务，但是有些历史的原因，短时间内没有变法变更数据库。当然也可以基于类如CDC这样的功能进行缓存的更新，但其实还是会存在缓存的问题，只是说可以通过一些手段降低缓存问题出现的概率，并无法从根本上解决问题\n所以，基于此，既然PostGIS可以实现动态矢量瓦片服务，我们自然也可以。公瑾大佬曾发文说过，当下地图服务去服务化、数据不切片基本上已经是必然的趋势，那么我为什么还要去做一个服务化的东西。大概就是下面这几个原因了：\n数据库技术，在某些特定的因素下，短时间内无法切换到PostGIS 数据量级 性能容忍度 小厂，我不思进取 🙄 后续知识储备 矢量瓦片标准 参见：矢量瓦片标准\n在这里贴几个关键点（对于目前使用上来说）：\n文件格式\n矢量瓦片文件采用Google Protocol Buffers进行编码。Google Protocol Buffers是一种兼容多语言、多平台、易扩展的数据序列化格式。\n投影和范围\n矢量瓦片表示的是投影在正方形区块上的数据。矢量瓦片不应该包含范围和投影信息。解码方被假定知道矢量瓦片的范围和投影信息。\nWeb Mercator是默认的投影方式，Google tile scheme是默认的瓦片编号方式。两者一起完成了与任意范围、任意精度的地理区域的一一对应，例如https://example.com/17/65535/43602.mvt。\n矢量瓦片可以用来表示任意投影方式、任意瓦片编号方案的数据。\n内部结构\n图层\n每块矢量瓦片应该至少包含一个图层。每个图层应该至少包含一个要素。\n几何图形编码\n矢量瓦片中的几何数据被定义为屏幕坐标系。瓦片的左上角（显示默认如此）是坐标系的原点。X轴向右为正，Y轴向下为正。几何图形中的坐标必须为整数。\n矢量瓦片服务构建 在这里，我选择抄GeoServer的作业。众所周知，PostGIS是开源的，那为什么没有选择抄PostGIS的作业呢？\n当下水平不够 想快速验证想法 想基于GeoServer做二次开发，或者说是基于现存的地图服务相关的实现，集各家之大成，合并成一个组在功能上可自由搭配的、较高性能服务端组件 接着说当前的事情。要实现一个动态矢量瓦片服务，我们需要先分析一下实现内容，在此先做出如下拆解：\n动态矢量瓦片服务可以理解为没有瓦片缓存的，实时生成的矢量瓦片服务，所以核心还是矢量瓦片服务(@time 20210503: 动态矢量瓦片技术是相对矢量瓦片技术提出的，而矢量瓦片技术的大规模应用还是以预切为主，所以动态矢量瓦片要解决的是不再预切动态生成，同时避免一下子生成大规模瓦片文件的问题) 矢量瓦片服务也就是根据调用端传递的参数，从数据源获取对应的数据，并将其转换为矢量瓦片格式，最终返回给调用端 这里选择瓦片坐标作为检索参数，可以便于服务降级（缓存）和性能优化（瓦片坐标值相对来说更加准确和可固定，且便于降维） 需要实现瓦片坐标系到数据源坐标系下数据范围的相互转换 需要实现数据源的范围查询 需要实现矢量数据到矢量瓦片的编解码 那么大体的实现路径可归结于如下所示：\n其中的核心要点总结如下：",
+  "keywords": [
+    "vector tile", "service"
+  ],
+  "articleBody": "前言 关于矢量瓦片（节选） 地图瓦片技术是在线地图服务常用的瓦片技术，瓦片就是地图瓦片的具体存储形态，提前切好的瓦片可以大大提高在线地图的访问效率。\n栅格瓦片 以图片为介质的栅格瓦片使得在线地图得以迅速普及，优势在于显示效率高、方便传输。但是，随着地图的移动化和应用的逐渐深入，栅格瓦片占用带宽和存储都较大，不利于地图在移动设备的应用。\n矢量瓦片 矢量瓦片的产生弥补了栅格瓦片的不足。矢量瓦片数据以矢量形式存在。矢量瓦片体积下，可高度压缩，占用的存储空间比栅格瓦片要小上千倍。数据传输体量小，地图更新的代价小\n常见的矢量瓦片制作工具（节选） 目前开源的矢量切片工具还是非常多的，列出一些主流的阐述下：\n基于GeoServer的矢量切片插件，适合熟悉GeoServer的用户，操作还比较简单，缺点是切片的行列号与一般的XYZ编号不同不容易单独部署。 基于tippecanoe的矢量切片工具方案，该工具提供了很多高级功能在数据定制化上有很强的优势，但只能部署在Linux，并不是跨平台，只能读取geojson文件，不能直连数据库，不是很好，如果有幸您是c++开发大神，可以改下库的编译绑定平台，使其支持windows，再更改下数据源底层，使其能支持空间数据库，那么该工具会有更多的应用空间。 基于PostGIS的矢量切片方案，该方案在熟悉PostGIS的用户中应该很受欢迎，优势是支持动态矢量切片，有PG社区的系统级加成。 总的来说，工具虽然很多，但是没有一款可以说覆盖一切场景的，具体应用还是看场景的，比如前两个方案都是做底图数据时比较有用，都是静态矢量切片方案，geoserver能直连数据库，tippecanoe有强数据定制性要求，那么如果用户侧重点是简单点的话geoserver够了，用户侧重点是希望对数据做很多高级过滤什么的操作用tippecanoe，但步骤麻烦点。这些矢量切片工具仅仅在处理很久不变的数据，就是切一次用很久的数据，如果数据频繁变化，这种静态数据切片工具就很不好用了。\n与其他方案相比，PostGIS方案的好处主要有两大点：\n资源开销低：空间数据一般存空间数据库中，传统工具会先从数据库中捞数据，这个数据通常很大，网络开销和服务器端内存都要很大，查询慢计算慢是肯定的。而PostGIS是在数据库中把数据处理完，只把结果传给后台转前台，可以很方便的使用数据库的索引，并行计算等，优化查询和处理速度。 动态矢量切片，数据时效性高：每当根据xyz请求时，数据库会动态查询范围内数据，裁剪简化并输出pbf格式的二进制数据出去，在数据变化频繁的场景下，可以保证用户看到的是最新的数据。 💡 GeoServer、Tippecanoe 皆为静态矢量切片方案，需提前准备切片数据，并进行持久化（GeoServer也可以在使用时进行切片，同时进行持久化）。PostGIS支持动态矢量切片方案，即实时计算生成切片，且不进行切片的持久化。\n为什么要自己写一个服务 于我个人而言，我目前仅接触和使用到了GeoServer，且对其中的实现细节并不太清楚，所以想通过参考模仿的方式实现一个示例服务。其次，还想测试在没有如GeoWebcache此类的瓦片缓存的情况下，服务的性能如何。综上所述，其实也就是为了如下这几方面的目的：\n学习，了解其中的实现细节\n更好的适配\n比如说，WMTS服务很明确存在缓存，WMS性能又不够好。如果使用WMTS服务确实可以提升服务的性能，但是对于源数据存在编辑的场景下，缓存问题还是会让人头疼。\n那么是否存在动态的矢量瓦片服务？既能解决缓存的问题，同时还没有太大的性能问题。\n你或许会提到基于PostGIS的动态矢量瓦片服务，但是有些历史的原因，短时间内没有变法变更数据库。当然也可以基于类如CDC这样的功能进行缓存的更新，但其实还是会存在缓存的问题，只是说可以通过一些手段降低缓存问题出现的概率，并无法从根本上解决问题\n所以，基于此，既然PostGIS可以实现动态矢量瓦片服务，我们自然也可以。公瑾大佬曾发文说过，当下地图服务去服务化、数据不切片基本上已经是必然的趋势，那么我为什么还要去做一个服务化的东西。大概就是下面这几个原因了：\n数据库技术，在某些特定的因素下，短时间内无法切换到PostGIS 数据量级 性能容忍度 小厂，我不思进取 🙄 后续知识储备 矢量瓦片标准 参见：矢量瓦片标准\n在这里贴几个关键点（对于目前使用上来说）：\n文件格式\n矢量瓦片文件采用Google Protocol Buffers进行编码。Google Protocol Buffers是一种兼容多语言、多平台、易扩展的数据序列化格式。\n投影和范围\n矢量瓦片表示的是投影在正方形区块上的数据。矢量瓦片不应该包含范围和投影信息。解码方被假定知道矢量瓦片的范围和投影信息。\nWeb Mercator是默认的投影方式，Google tile scheme是默认的瓦片编号方式。两者一起完成了与任意范围、任意精度的地理区域的一一对应，例如https://example.com/17/65535/43602.mvt。\n矢量瓦片可以用来表示任意投影方式、任意瓦片编号方案的数据。\n内部结构\n图层\n每块矢量瓦片应该至少包含一个图层。每个图层应该至少包含一个要素。\n几何图形编码\n矢量瓦片中的几何数据被定义为屏幕坐标系。瓦片的左上角（显示默认如此）是坐标系的原点。X轴向右为正，Y轴向下为正。几何图形中的坐标必须为整数。\n矢量瓦片服务构建 在这里，我选择抄GeoServer的作业。众所周知，PostGIS是开源的，那为什么没有选择抄PostGIS的作业呢？\n当下水平不够 想快速验证想法 想基于GeoServer做二次开发，或者说是基于现存的地图服务相关的实现，集各家之大成，合并成一个组在功能上可自由搭配的、较高性能服务端组件 接着说当前的事情。要实现一个动态矢量瓦片服务，我们需要先分析一下实现内容，在此先做出如下拆解：\n动态矢量瓦片服务可以理解为没有瓦片缓存的，实时生成的矢量瓦片服务，所以核心还是矢量瓦片服务(@time 20210503: 动态矢量瓦片技术是相对矢量瓦片技术提出的，而矢量瓦片技术的大规模应用还是以预切为主，所以动态矢量瓦片要解决的是不再预切动态生成，同时避免一下子生成大规模瓦片文件的问题) 矢量瓦片服务也就是根据调用端传递的参数，从数据源获取对应的数据，并将其转换为矢量瓦片格式，最终返回给调用端 这里选择瓦片坐标作为检索参数，可以便于服务降级（缓存）和性能优化（瓦片坐标值相对来说更加准确和可固定，且便于降维） 需要实现瓦片坐标系到数据源坐标系下数据范围的相互转换 需要实现数据源的范围查询 需要实现矢量数据到矢量瓦片的编解码 那么大体的实现路径可归结于如下所示：\n其中的核心要点总结如下：\n瓦片金字塔模型构建 瓦片坐标系与空间坐标系的映射关系 切片方案确定 瓦片大小 分辨率 … 矢量瓦片的编解码 矢量数据查询 下面将对以上几点作详细描述，本次内容基本上全部参考GeoServer实现完成。\n瓦片金字塔模型构建 瓦片金字塔模型（节选） 瓦片最早是由谷歌地图提出并进行应用的，其采用特定的切割方式对采用WebMercator投影坐标的世界地图栅格影像进行切片，由于WebMercator投影方便计算机进行计算，随后各大主流WebGIS和互联网地图应用商都采用基于WebMercator投影坐标系的方式进行切片。\n瓦片金字塔的主要原理为：基于某个特定的地图投影坐标系，将曲面 的地球投影到二维平面，而后将该二维平面进行多尺度地划分，即相当于制作了多个不同分辨率层级的数字地图。各层级对应相应编码，层级越高地图所对应的分辨率越高；而后对每一层级的全球空间范围地图按照某种空间划分方法进行格网划分，划分成若干行和列的固定尺寸的正方形栅格图片，这些切分出来的规整的单个格网单元称为瓦片，各层级的划分方法都是相同的。\n瓦片划分方法需满足以下条件：\n每个层级下的所有瓦片可以无缝拼合成一张全球空间范围的世界地图 每个瓦片都有唯一编码，根据编码可以解算该瓦片对应的空间范围 在某一层级下给定一坐标点可以根据其空间坐标解算其所在瓦片的编号 每一层级瓦片对应一层金字塔，各个层级的瓦片构成了整个瓦片金字塔模型。每一层中的瓦片划分方法一般采用均匀四分的划分方法，即以赤道和中央经线的交点为初始中心，不断地对地图进行四分，直到每个格网的大小为tilesize * tilesize为止，其中tilesize表示单个瓦片的边长。基于此种划分方法，第0层金字塔（金字塔顶层）用一个瓦片就能表示整张世界地图，第1层要用4^z个瓦片来表示整个世界地图，z为当前瓦片的金字塔层级。\n瓦片坐标系（节选） 所有瓦片的编码都是基于瓦片坐标系下进行的，瓦片坐标系的原点一般都在左上角或者左下角，TMS规范中是在左下角（GeoServer遵循该规范），但是现有的Google、MapNIK切片系统都是选用左上角作为原点，本文主要以原点在左上角的瓦片坐标系进行说明。\n瓦片的编码方式如下图所示，层级用z表示，瓦片经线方向（指瓦片经度发生变化的方法，即东西向，东向为正）上编号为x，纬线方向（指瓦片维度发生变化的方向，即南北向，南向为正）上编号为y，因此每一个瓦片都可以通过一个三维元组（x,y,z）来唯一描述。\n💡 节选自《高性能影像数据瓦片化关键技术研究-刘世永-2016》，章节：第二章，2.1-2.3\n瓦片金字塔程序模型 此处只显示核心模块\nGrid，对应单层金字塔\n// 指定层级横向的瓦片数量 private long numTilesWide; // 指定层级纵向的瓦片数量 private long numTilesHigh; // 分辨率 private double resolution; // 比例尺分母 private double scaleDenom; private String name; GridSet，对应完整的金字塔层级\n// 名称 private String name; private SRS srs; // 瓦片宽度，一般为256 private int tileWidth; // 瓦片高度，一般为256 private int tileHeight; protected boolean yBaseToggle = false; private boolean yCoordinateFirst = false; private boolean scaleWarning = false; private double metersPerUnit; private double pixelSize; // 数据范围 private BoundingBox originalExtent; private Grid[] gridLevels; private String description; private boolean resolutionsPreserved; 瓦片金字塔逻辑模型构建 瓦片金字塔需要又逻辑模型与物理模型共同构成，物理模型（即瓦片集）需要根据逻辑模型的定义才可进行构建。此处以常规瓦片金字塔逻辑模型为示例，通过上述程序模型，构建瓦片金字塔逻辑模型\n// Pixel size (to calculate scales). The default is 0.28mm/pixel, corresponding to 90.71428571428572 DPI. public static GridSet buildGriDSet(SRS srs, double pixelSize) { return GridSetFactory.createGridSet(String.valueOf(srs.getNumber()), srs, BoundingBox.WORLD3857, false, 30, null, pixelSize, 256, 256, false); } // 需要将其转换为米 buildGriDSet(SRS.getEPSG900913(), 0.00028D); public static GridSet createGridSet(String name, SRS srs, BoundingBox extent, boolean alignTopLeft, int levels, Double metersPerUnit, double pixelSize, int tileWidth, int tileHeight, boolean yCoordinateFirst) { double extentWidth = extent.getWidth(); double extentHeight = extent.getHeight(); double resX = extentWidth / (double)tileWidth; double resY = extentHeight / (double)tileHeight; int tilesWide; int tilesHigh; // 计算调整的基数, 以小边为主 if (resX \u003c= resY) { tilesWide = 1; tilesHigh = (int)Math.round(resY / resX); resY /= (double)tilesHigh; } else { tilesHigh = 1; tilesWide = (int)Math.round(resX / resY); resX /= (double)tilesWide; } // 计算地图分辨率, 即单位像素内表示的地图单位(米或度) double res = Math.max(resX, resY); // 获取裁减后的范围 double adjustedExtentWidth = (double)(tilesWide * tileWidth) * res; double adjustedExtentHeight = (double)(tilesHigh * tileHeight) * res; // 根据上述范围重新构建范围表达 BoundingBox adjExtent = new BoundingBox(extent); adjExtent.setMaxX(adjExtent.getMinX() + adjustedExtentWidth); // 这里想要表达的就是原点在于左上角还是左下角（确定起算位置）, 因为这样会影响y方向上的范围计算。就是进行y方向上范围计算 if (alignTopLeft) { adjExtent.setMinY(adjExtent.getMaxY() - adjustedExtentHeight); } else { adjExtent.setMaxY(adjExtent.getMinY() + adjustedExtentHeight); } // 根据给定的层级参数, 构建各层级下分辨率值 double[] resolutions = new double[levels]; // 设置0级的分辨率 resolutions[0] = res; for(int i = 1; i \u003c levels; ++i) { // 采用常规均匀四分（四叉树）方式进行构建 resolutions[i] = resolutions[i - 1] / 2.0D; } return createGridSet(name, srs, adjExtent, alignTopLeft, resolutions, (double[])null, metersPerUnit, pixelSize, (String[])null, tileWidth, tileHeight, yCoordinateFirst); } public static GridSet createGridSet(String name, SRS srs, BoundingBox extent, boolean alignTopLeft, double[] resolutions, double[] scaleDenoms, Double metersPerUnit, double pixelSize, String[] scaleNames, int tileWidth, int tileHeight, boolean yCoordinateFirst) { Assert.notNull(name, \"name is null\"); Assert.notNull(srs, \"srs is null\"); Assert.notNull(extent, \"extent is null\"); Assert.isTrue(!extent.isNull() \u0026\u0026 extent.isSane(), \"Extent is invalid: \" + extent); Assert.isTrue(resolutions != null || scaleDenoms != null, \"The gridset definition must have either resolutions or scale denominators\"); Assert.isTrue(resolutions == null || scaleDenoms == null, \"Only one of resolutions or scaleDenoms should be provided, not both\"); int i; for(i = 1; resolutions != null \u0026\u0026 i \u003c resolutions.length; ++i) { if (resolutions[i] \u003e= resolutions[i - 1]) { throw new IllegalArgumentException(\"Each resolution should be lower than it's prior one. Res[\" + i + \"] == \" + resolutions[i] + \", Res[\" + (i - 1) + \"] == \" + resolutions[i - 1] + \".\"); } } for(i = 1; scaleDenoms != null \u0026\u0026 i \u003c scaleDenoms.length; ++i) { if (scaleDenoms[i] \u003e= scaleDenoms[i - 1]) { throw new IllegalArgumentException(\"Each scale denominator should be lower than it's prior one. Scale[\" + i + \"] == \" + scaleDenoms[i] + \", Scale[\" + (i - 1) + \"] == \" + scaleDenoms[i - 1] + \".\"); } } GridSet gridSet = baseGridSet(name, srs, tileWidth, tileHeight); // true：保留分辨率并计算 scaleDenominators // false：分辨率是根据 sacale 分母计算的 gridSet.setResolutionsPreserved(resolutions != null); gridSet.setPixelSize(pixelSize); gridSet.setOriginalExtent(extent); // tileOrigin()的y坐标是在顶部（true）还是在底部（false），相应的标记原点位置 gridSet.yBaseToggle = alignTopLeft; // 轴顺序, 默认经度优先 gridSet.setyCoordinateFirst(yCoordinateFirst); // 设置单位, 每个单位内表示多少米 // 经纬度直投的情况需要特殊处理 if (metersPerUnit == null) { if (srs.equals(SRS.getEPSG4326())) { gridSet.setMetersPerUnit(111319.49079327358D); } else if (srs.equals(SRS.getEPSG3857())) { gridSet.setMetersPerUnit(1.0D); } else { if (resolutions == null) { log.config(\"GridSet \" + name + \" was defined without metersPerUnit, assuming 1m/unit. All scales will be off if this is incorrect.\"); } else { log.config(\"GridSet \" + name + \" was defined without metersPerUnit. Assuming 1m per SRS unit for WMTS scale output.\"); gridSet.setScaleWarning(true); } gridSet.setMetersPerUnit(1.0D); } } else { gridSet.setMetersPerUnit(metersPerUnit); } if (resolutions == null) { gridSet.setGridLevels(new Grid[scaleDenoms.length]); } else { gridSet.setGridLevels(new Grid[resolutions.length]); } for(i = 0; i \u003c gridSet.getNumLevels(); ++i) { Grid curGrid = new Grid(); if (scaleDenoms != null) { curGrid.setScaleDenominator(scaleDenoms[i]); curGrid.setResolution(pixelSize * (scaleDenoms[i] / gridSet.getMetersPerUnit())); } else { curGrid.setResolution(resolutions[i]); // 计算比例尺 (单位像素下表示的实际空间距离 * 每个单位情况表示多少米) / (像素大小，或称像元大小) // 约去像元, 即获取到比例尺分母 curGrid.setScaleDenominator(resolutions[i] * gridSet.getMetersPerUnit() / 2.8E-4D); } double mapUnitWidth = (double)tileWidth * curGrid.getResolution(); double mapUnitHeight = (double)tileHeight * curGrid.getResolution(); long tilesWide = (long)Math.ceil((extent.getWidth() - mapUnitWidth * 0.01D) / mapUnitWidth); long tilesHigh = (long)Math.ceil((extent.getHeight() - mapUnitHeight * 0.01D) / mapUnitHeight); curGrid.setNumTilesWide(tilesWide); curGrid.setNumTilesHigh(tilesHigh); if (scaleNames != null \u0026\u0026 scaleNames[i] != null) { curGrid.setName(scaleNames[i]); } else { curGrid.setName(gridSet.getName() + \":\" + i); } gridSet.setGrid(i, curGrid); } return gridSet; } 矢量瓦片编解码模块 参考GeoServer实现，使用第三方编解码组件：java-vector-tile\nhttps://github.com/ElectronicChartCentre/java-vector-tile\n矢量数据查询 为了更快的实现开发，此处选择使用GeoTools提供的JDBC相关组件进行数据查询，核心类如下：\nJDBCDataStore VirtualTable：可以支持自定义SQL MathTransform ContentFeatureSource SimpleFeatureCollection 主要逻辑步骤如下所示：\n通过JDBCDataStore创建VirtualTable实例 根据GridSet将传入参数转为BoundingBox 使用MathTransform将BoudingBox转换到源数据所对应的坐标系下 构建查询对象，并使用上述创建的虚拟表实例（ContentFeatureSource）进行数据检索 将检索的数据结果应用于矢量瓦片编码并返回结果 服务验证 叠加底图进行验证\n参考 Mapbox Vector Tile Specification awesome-vector-tiles Vector tiles standards 矢量瓦片概述 WebGIS数据不切片或是时代必然 PostGIS矢量切片技术助力GIS可视化 Geoserver Buffer around Vectortiles Gridsets and Gridsubsets Tiles à la Google Maps Coordinates, Tile Bounds and Projection 国内主要地图瓦片坐标系定义及计算原理 瓦片(Tile)地图原理 ",
+  "wordCount" : "872",
+  "inLanguage": "en",
+  "datePublished": "2023-05-23T22:46:59+08:00",
+  "dateModified": "2023-05-23T22:46:59+08:00",
+  "author":{
+    "@type": "Person",
+    "name": "Fuyi"
+  },
+  "mainEntityOfPage": {
+    "@type": "WebPage",
+    "@id": "https://fuyi-atlas.github.io/posts/program/map/how-to-build-a-vector-tile-service/"
+  },
+  "publisher": {
+    "@type": "Organization",
+    "name": "Fuyi Atlas",
+    "logo": {
+      "@type": "ImageObject",
+      "url": "https://fuyi-atlas.github.io/favicon.ico"
+    }
+  }
+}
+</script>
+</head>
+
+<body class="" id="top">
+<script>
+    if (localStorage.getItem("pref-theme") === "dark") {
+        document.body.classList.add('dark');
+    } else if (localStorage.getItem("pref-theme") === "light") {
+        document.body.classList.remove('dark')
+    } else if (window.matchMedia('(prefers-color-scheme: dark)').matches) {
+        document.body.classList.add('dark');
+    }
+
+</script>
+
+<header class="header">
+    <nav class="nav">
+        <div class="logo">
+            <a href="https://fuyi-atlas.github.io/" accesskey="h" title="Fuyi Atlas (Alt + H)">Fuyi Atlas</a>
+            <div class="logo-switches">
+                <button id="theme-toggle" accesskey="t" title="(Alt + T)">
+                    <svg id="moon" xmlns="http://www.w3.org/2000/svg" width="24" height="18" viewBox="0 0 24 24"
+                        fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"
+                        stroke-linejoin="round">
+                        <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path>
+                    </svg>
+                    <svg id="sun" xmlns="http://www.w3.org/2000/svg" width="24" height="18" viewBox="0 0 24 24"
+                        fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"
+                        stroke-linejoin="round">
+                        <circle cx="12" cy="12" r="5"></circle>
+                        <line x1="12" y1="1" x2="12" y2="3"></line>
+                        <line x1="12" y1="21" x2="12" y2="23"></line>
+                        <line x1="4.22" y1="4.22" x2="5.64" y2="5.64"></line>
+                        <line x1="18.36" y1="18.36" x2="19.78" y2="19.78"></line>
+                        <line x1="1" y1="12" x2="3" y2="12"></line>
+                        <line x1="21" y1="12" x2="23" y2="12"></line>
+                        <line x1="4.22" y1="19.78" x2="5.64" y2="18.36"></line>
+                        <line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line>
+                    </svg>
+                </button>
+                <ul class="lang-switch"><li>|</li>
+                    <li>
+                        <a href="https://fuyi-atlas.github.io/zh/" title="Chinese"
+                            aria-label="Chinese">Zh</a>
+                    </li>
+                </ul>
+            </div>
+        </div>
+        <ul id="menu">
+            <li>
+                <a href="https://fuyi-atlas.github.io/archives/" title="Archive">
+                    <span>Archive</span>
+                </a>
+            </li>
+            <li>
+                <a href="https://fuyi-atlas.github.io/search/" title="Search (Alt &#43; /)" accesskey=/>
+                    <span>Search</span>
+                </a>
+            </li>
+            <li>
+                <a href="https://fuyi-atlas.github.io/categories/" title="Categories">
+                    <span>Categories</span>
+                </a>
+            </li>
+            <li>
+                <a href="https://fuyi-atlas.github.io/tags/" title="Tags">
+                    <span>Tags</span>
+                </a>
+            </li>
+        </ul>
+    </nav>
+</header>
+<main class="main">
+
+<article class="post-single">
+  <header class="post-header">
+    <div class="breadcrumbs"><a href="https://fuyi-atlas.github.io/">Home</a>&nbsp;»&nbsp;<a href="https://fuyi-atlas.github.io/posts/">Posts</a></div>
+    <h1 class="post-title entry-hint-parent">
+      如何构建一个矢量瓦片服务
+    </h1>
+    <div class="post-meta"><span title='2023-05-23 22:46:59 +0800 CST'>May 23, 2023</span>&nbsp;·&nbsp;5 min&nbsp;·&nbsp;Fuyi
+
+</div>
+  </header> <div class="toc">
+    <details >
+        <summary accesskey="c" title="(Alt + C)">
+            <span class="details">Table of Contents</span>
+        </summary>
+
+        <div class="inner"><ul>
+                <li>
+                    <a href="#%e5%89%8d%e8%a8%80" aria-label="前言">前言</a><ul>
+                        
+                <li>
+                    <a href="#%e5%85%b3%e4%ba%8e%e7%9f%a2%e9%87%8f%e7%93%a6%e7%89%87%e8%8a%82%e9%80%89" aria-label="关于矢量瓦片（节选）">关于矢量瓦片（节选）</a><ul>
+                        
+                <li>
+                    <a href="#%e6%a0%85%e6%a0%bc%e7%93%a6%e7%89%87" aria-label="栅格瓦片">栅格瓦片</a></li>
+                <li>
+                    <a href="#%e7%9f%a2%e9%87%8f%e7%93%a6%e7%89%87" aria-label="矢量瓦片">矢量瓦片</a></li></ul>
+                </li>
+                <li>
+                    <a href="#%e5%b8%b8%e8%a7%81%e7%9a%84%e7%9f%a2%e9%87%8f%e7%93%a6%e7%89%87%e5%88%b6%e4%bd%9c%e5%b7%a5%e5%85%b7%e8%8a%82%e9%80%89" aria-label="常见的矢量瓦片制作工具（节选）">常见的矢量瓦片制作工具（节选）</a></li>
+                <li>
+                    <a href="#%e4%b8%ba%e4%bb%80%e4%b9%88%e8%a6%81%e8%87%aa%e5%b7%b1%e5%86%99%e4%b8%80%e4%b8%aa%e6%9c%8d%e5%8a%a1" aria-label="为什么要自己写一个服务">为什么要自己写一个服务</a></li></ul>
+                </li>
+                <li>
+                    <a href="#%e7%9f%a2%e9%87%8f%e7%93%a6%e7%89%87%e6%a0%87%e5%87%86" aria-label="矢量瓦片标准">矢量瓦片标准</a></li>
+                <li>
+                    <a href="#%e7%9f%a2%e9%87%8f%e7%93%a6%e7%89%87%e6%9c%8d%e5%8a%a1%e6%9e%84%e5%bb%ba" aria-label="矢量瓦片服务构建">矢量瓦片服务构建</a><ul>
+                        
+                <li>
+                    <a href="#%e7%93%a6%e7%89%87%e9%87%91%e5%ad%97%e5%a1%94%e6%a8%a1%e5%9e%8b%e6%9e%84%e5%bb%ba" aria-label="瓦片金字塔模型构建">瓦片金字塔模型构建</a><ul>
+                        
+                <li>
+                    <a href="#%e7%93%a6%e7%89%87%e9%87%91%e5%ad%97%e5%a1%94%e6%a8%a1%e5%9e%8b%e8%8a%82%e9%80%89" aria-label="瓦片金字塔模型（节选）">瓦片金字塔模型（节选）</a></li>
+                <li>
+                    <a href="#%e7%93%a6%e7%89%87%e5%9d%90%e6%a0%87%e7%b3%bb%e8%8a%82%e9%80%89" aria-label="瓦片坐标系（节选）">瓦片坐标系（节选）</a></li>
+                <li>
+                    <a href="#%e7%93%a6%e7%89%87%e9%87%91%e5%ad%97%e5%a1%94%e7%a8%8b%e5%ba%8f%e6%a8%a1%e5%9e%8b" aria-label="瓦片金字塔程序模型">瓦片金字塔程序模型</a></li>
+                <li>
+                    <a href="#%e7%93%a6%e7%89%87%e9%87%91%e5%ad%97%e5%a1%94%e9%80%bb%e8%be%91%e6%a8%a1%e5%9e%8b%e6%9e%84%e5%bb%ba" aria-label="瓦片金字塔逻辑模型构建">瓦片金字塔逻辑模型构建</a></li></ul>
+                </li>
+                <li>
+                    <a href="#%e7%9f%a2%e9%87%8f%e7%93%a6%e7%89%87%e7%bc%96%e8%a7%a3%e7%a0%81%e6%a8%a1%e5%9d%97" aria-label="矢量瓦片编解码模块">矢量瓦片编解码模块</a></li>
+                <li>
+                    <a href="#%e7%9f%a2%e9%87%8f%e6%95%b0%e6%8d%ae%e6%9f%a5%e8%af%a2" aria-label="矢量数据查询">矢量数据查询</a></li>
+                <li>
+                    <a href="#%e6%9c%8d%e5%8a%a1%e9%aa%8c%e8%af%81" aria-label="服务验证">服务验证</a></li></ul>
+                </li>
+                <li>
+                    <a href="#%e5%8f%82%e8%80%83" aria-label="参考">参考</a>
+                </li>
+            </ul>
+        </div>
+    </details>
+</div>
+
+  <div class="post-content"><h2 id="前言">前言<a hidden class="anchor" aria-hidden="true" href="#前言">#</a></h2>
+<h3 id="关于矢量瓦片节选">关于矢量瓦片（节选）<a hidden class="anchor" aria-hidden="true" href="#关于矢量瓦片节选">#</a></h3>
+<p>地图瓦片技术是在线地图服务常用的瓦片技术，瓦片就是地图瓦片的具体存储形态，提前切好的瓦片可以大大提高在线地图的访问效率。</p>
+<h4 id="栅格瓦片">栅格瓦片<a hidden class="anchor" aria-hidden="true" href="#栅格瓦片">#</a></h4>
+<p>以图片为介质的栅格瓦片使得在线地图得以迅速普及，优势在于显示效率高、方便传输。但是，随着地图的移动化和应用的逐渐深入，栅格瓦片占用带宽和存储都较大，不利于地图在移动设备的应用。</p>
+<h4 id="矢量瓦片">矢量瓦片<a hidden class="anchor" aria-hidden="true" href="#矢量瓦片">#</a></h4>
+<p>矢量瓦片的产生弥补了栅格瓦片的不足。矢量瓦片数据以矢量形式存在。矢量瓦片体积下，可高度压缩，占用的存储空间比栅格瓦片要小上千倍。数据传输体量小，地图更新的代价小</p>
+<p><img loading="lazy" src="https://zhou-fuyi.github.io/picx-images-hosting/vector-tile-arch.99t3quzzk0.webp" alt="vector-tile-arch"  />
+</p>
+<h3 id="常见的矢量瓦片制作工具节选">常见的矢量瓦片制作工具（节选）<a hidden class="anchor" aria-hidden="true" href="#常见的矢量瓦片制作工具节选">#</a></h3>
+<p>目前开源的矢量切片工具还是非常多的，列出一些主流的阐述下：</p>
+<ul>
+<li>基于GeoServer的矢量切片插件，适合熟悉GeoServer的用户，操作还比较简单，缺点是切片的行列号与一般的XYZ编号不同不容易单独部署。</li>
+<li>基于tippecanoe的矢量切片工具方案，该工具提供了很多高级功能在数据定制化上有很强的优势，但只能部署在Linux，并不是跨平台，只能读取geojson文件，不能直连数据库，不是很好，如果有幸您是c++开发大神，可以改下库的编译绑定平台，使其支持windows，再更改下数据源底层，使其能支持空间数据库，那么该工具会有更多的应用空间。</li>
+<li>基于PostGIS的矢量切片方案，该方案在熟悉PostGIS的用户中应该很受欢迎，优势是支持动态矢量切片，有PG社区的系统级加成。</li>
+</ul>
+<p>总的来说，工具虽然很多，但是没有一款可以说覆盖一切场景的，具体应用还是看场景的，比如前两个方案都是做底图数据时比较有用，都是静态矢量切片方案，geoserver能直连数据库，tippecanoe有强数据定制性要求，那么如果用户侧重点是简单点的话geoserver够了，用户侧重点是希望对数据做很多高级过滤什么的操作用tippecanoe，但步骤麻烦点。这些矢量切片工具仅仅在处理很久不变的数据，就是切一次用很久的数据，如果数据频繁变化，这种静态数据切片工具就很不好用了。</p>
+<p>与其他方案相比，PostGIS方案的好处主要有两大点：</p>
+<ul>
+<li>资源开销低：空间数据一般存空间数据库中，传统工具会先从数据库中捞数据，这个数据通常很大，网络开销和服务器端内存都要很大，查询慢计算慢是肯定的。而PostGIS是在数据库中把数据处理完，只把结果传给后台转前台，可以很方便的使用数据库的索引，并行计算等，优化查询和处理速度。</li>
+<li>动态矢量切片，数据时效性高：每当根据xyz请求时，数据库会动态查询范围内数据，裁剪简化并输出pbf格式的二进制数据出去，在数据变化频繁的场景下，可以保证用户看到的是最新的数据。</li>
+</ul>
+<blockquote>
+<p>💡 GeoServer、Tippecanoe 皆为静态矢量切片方案，需提前准备切片数据，并进行持久化（GeoServer也可以在使用时进行切片，同时进行持久化）。PostGIS支持动态矢量切片方案，即实时计算生成切片，且不进行切片的持久化。</p>
+</blockquote>
+<h3 id="为什么要自己写一个服务">为什么要自己写一个服务<a hidden class="anchor" aria-hidden="true" href="#为什么要自己写一个服务">#</a></h3>
+<p>于我个人而言，我目前仅接触和使用到了GeoServer，且对其中的实现细节并不太清楚，所以想通过参考模仿的方式实现一个示例服务。其次，还想测试在没有如GeoWebcache此类的瓦片缓存的情况下，服务的性能如何。综上所述，其实也就是为了如下这几方面的目的：</p>
+<ul>
+<li>
+<p>学习，了解其中的实现细节</p>
+</li>
+<li>
+<p>更好的适配</p>
+<p>比如说，WMTS服务很明确存在缓存，WMS性能又不够好。如果使用WMTS服务确实可以提升服务的性能，但是对于源数据存在编辑的场景下，缓存问题还是会让人头疼。</p>
+</li>
+</ul>
+<hr>
+<p>那么是否存在动态的矢量瓦片服务？既能解决缓存的问题，同时还没有太大的性能问题。</p>
+<p>你或许会提到基于PostGIS的动态矢量瓦片服务，但是有些历史的原因，短时间内没有变法变更数据库。当然也可以基于类如CDC这样的功能进行缓存的更新，但其实还是会存在缓存的问题，只是说可以通过一些手段降低缓存问题出现的概率，并无法从根本上解决问题</p>
+<p>所以，基于此，既然PostGIS可以实现动态矢量瓦片服务，我们自然也可以。公瑾大佬曾发文说过，当下<a href="https://mp.weixin.qq.com/s?__biz=Mzg2OTUxMzM2MA==&mid=2247484242&idx=1&sn=5900ba848b5cad687a7f17618b6e0872&chksm=ce9aa2adf9ed2bbbc2871bebf311932895b34a2c458e0a307be1b47bcb6cb2e667b177b53d3d&mpshare=1&scene=23&srcid=0513nR06xrC66TIgghKCM2iJ&sharer_sharetime=1683967136869&sharer_shareid=a30258a8ecb50abd4544d59818ed586e#rd">地图服务去服务化</a>、<a href="https://zhuanlan.zhihu.com/p/512298212">数据不切片</a>基本上已经是必然的趋势，那么我为什么还要去做一个服务化的东西。大概就是下面这几个原因了：</p>
+<ul>
+<li>数据库技术，在某些特定的因素下，短时间内无法切换到PostGIS</li>
+<li>数据量级</li>
+<li>性能容忍度</li>
+<li>小厂，我不思进取 🙄</li>
+<li>后续知识储备</li>
+</ul>
+<h2 id="矢量瓦片标准">矢量瓦片标准<a hidden class="anchor" aria-hidden="true" href="#矢量瓦片标准">#</a></h2>
+<p>参见：<strong><a href="https://github.com/jingsam/vector-tile-spec/blob/master/2.1/README_zh.md">矢量瓦片标准</a></strong></p>
+<p>在这里贴几个关键点（对于目前使用上来说）：</p>
+<ul>
+<li>
+<p>文件格式</p>
+<p>矢量瓦片文件采用<a href="https://developers.google.com/protocol-buffers/">Google Protocol Buffers</a>进行编码。Google Protocol Buffers是一种兼容多语言、多平台、易扩展的数据序列化格式。</p>
+</li>
+<li>
+<p>投影和范围</p>
+<p>矢量瓦片表示的是投影在正方形区块上的数据。矢量瓦片<strong>不应该</strong>包含范围和投影信息。解码方被假定知道矢量瓦片的范围和投影信息。</p>
+<p><a href="https://en.wikipedia.org/wiki/Web_Mercator">Web Mercator</a>是默认的投影方式，<a href="http://www.maptiler.org/google-maps-coordinates-tile-bounds-projection/">Google tile scheme</a>是默认的瓦片编号方式。两者一起完成了与任意范围、任意精度的地理区域的一一对应，例如<code>https://example.com/17/65535/43602.mvt</code>。</p>
+<p>矢量瓦片<strong>可以</strong>用来表示任意投影方式、任意瓦片编号方案的数据。</p>
+</li>
+<li>
+<p>内部结构</p>
+<ul>
+<li>
+<p>图层</p>
+<p>每块矢量瓦片<strong>应该</strong>至少包含一个图层。每个图层<strong>应该</strong>至少包含一个要素。</p>
+</li>
+<li>
+<p>几何图形编码</p>
+<p>矢量瓦片中的几何数据被定义为<strong>屏幕坐标系</strong>。瓦片的左上角（显示默认如此）是坐标系的原点。X轴向右为正，Y轴向下为正。几何图形中的坐标<strong>必须</strong>为整数。</p>
+</li>
+</ul>
+</li>
+</ul>
+<h2 id="矢量瓦片服务构建">矢量瓦片服务构建<a hidden class="anchor" aria-hidden="true" href="#矢量瓦片服务构建">#</a></h2>
+<p>在这里，我选择抄GeoServer的作业。众所周知，PostGIS是开源的，那为什么没有选择抄PostGIS的作业呢？</p>
+<ul>
+<li>当下水平不够</li>
+<li>想快速验证想法</li>
+<li>想基于GeoServer做二次开发，或者说是基于现存的地图服务相关的实现，集各家之大成，合并成一个组在功能上可自由搭配的、较高性能服务端组件</li>
+</ul>
+<p>接着说当前的事情。要实现一个动态矢量瓦片服务，我们需要先分析一下实现内容，在此先做出如下拆解：</p>
+<ul>
+<li><del>动态矢量瓦片服务可以理解为没有瓦片缓存的，实时生成的矢量瓦片服务，所以核心还是矢量瓦片服务</del>(@time 20210503: 动态矢量瓦片技术是相对矢量瓦片技术提出的，而矢量瓦片技术的大规模应用还是以预切为主，所以动态矢量瓦片要解决的是不再预切动态生成，同时避免一下子生成大规模瓦片文件的问题)</li>
+<li>矢量瓦片服务也就是根据调用端传递的参数，从数据源获取对应的数据，并将其转换为矢量瓦片格式，最终返回给调用端</li>
+<li>这里选择瓦片坐标作为检索参数，可以便于服务降级（缓存）和性能优化（瓦片坐标值相对来说更加准确和可固定，且便于降维）</li>
+<li>需要实现瓦片坐标系到数据源坐标系下数据范围的相互转换</li>
+<li>需要实现数据源的范围查询</li>
+<li>需要实现矢量数据到矢量瓦片的编解码</li>
+</ul>
+<p>那么大体的实现路径可归结于如下所示：</p>
+<p><img loading="lazy" src="https://zhou-fuyi.github.io/picx-images-hosting/%e7%9f%a2%e9%87%8f%e7%93%a6%e7%89%87%e6%9c%8d%e5%8a%a1%e5%ae%9e%e7%8e%b0%e8%b7%af%e5%be%84.8kzu6ucgk3.webp" alt="矢量瓦片服务实现路径"  />
+</p>
+<p>其中的核心要点总结如下：</p>
+<ul>
+<li>瓦片金字塔模型构建
+<ul>
+<li>瓦片坐标系与空间坐标系的映射关系</li>
+<li>切片方案确定
+<ul>
+<li>瓦片大小</li>
+<li>分辨率</li>
+<li>…</li>
+</ul>
+</li>
+</ul>
+</li>
+<li>矢量瓦片的编解码</li>
+<li>矢量数据查询</li>
+</ul>
+<p>下面将对以上几点作详细描述，本次内容基本上全部参考GeoServer实现完成。</p>
+<h3 id="瓦片金字塔模型构建">瓦片金字塔模型构建<a hidden class="anchor" aria-hidden="true" href="#瓦片金字塔模型构建">#</a></h3>
+<h4 id="瓦片金字塔模型节选">瓦片金字塔模型（节选）<a hidden class="anchor" aria-hidden="true" href="#瓦片金字塔模型节选">#</a></h4>
+<p>瓦片最早是由谷歌地图提出并进行应用的，其采用特定的切割方式对采用WebMercator投影坐标的世界地图栅格影像进行切片，由于WebMercator投影方便计算机进行计算，随后各大主流WebGIS和互联网地图应用商都采用基于WebMercator投影坐标系的方式进行切片。</p>
+<p>瓦片金字塔的主要原理为：基于某个特定的地图投影坐标系，将曲面 的地球投影到二维平面，而后将该二维平面进行多尺度地划分，即相当于制作了多个不同分辨率层级的数字地图。各层级对应相应编码，层级越高地图所对应的分辨率越高；而后对每一层级的全球空间范围地图按照某种空间划分方法进行格网划分，划分成若干行和列的固定尺寸的正方形栅格图片，这些切分出来的规整的单个格网单元称为瓦片，各层级的划分方法都是相同的。</p>
+<p>瓦片划分方法需满足以下条件：</p>
+<ol>
+<li>每个层级下的所有瓦片可以无缝拼合成一张全球空间范围的世界地图</li>
+<li>每个瓦片都有唯一编码，根据编码可以解算该瓦片对应的空间范围</li>
+<li>在某一层级下给定一坐标点可以根据其空间坐标解算其所在瓦片的编号</li>
+</ol>
+<p>每一层级瓦片对应一层金字塔，各个层级的瓦片构成了整个瓦片金字塔模型。每一层中的瓦片划分方法一般采用均匀四分的划分方法，即以赤道和中央经线的交点为初始中心，不断地对地图进行四分，直到每个格网的大小为tilesize * tilesize为止，其中tilesize表示单个瓦片的边长。基于此种划分方法，第0层金字塔（<em>金字塔顶层</em>）用一个瓦片就能表示整张世界地图，第1层要用4^z个瓦片来表示整个世界地图，z为当前瓦片的金字塔层级。</p>
+<p><img loading="lazy" src="https://zhou-fuyi.github.io/picx-images-hosting/%e9%87%91%e5%ad%97%e5%a1%94%e7%a4%ba%e6%84%8f%e5%9b%be1.5q7611x9sg.webp" alt="金字塔示意图1"  />
+</p>
+<h4 id="瓦片坐标系节选">瓦片坐标系（节选）<a hidden class="anchor" aria-hidden="true" href="#瓦片坐标系节选">#</a></h4>
+<p>所有瓦片的编码都是基于瓦片坐标系下进行的，瓦片坐标系的原点一般都在左上角或者左下角，TMS规范中是在左下角（GeoServer遵循该规范），但是现有的Google、MapNIK切片系统都是选用左上角作为原点，本文主要以原点在左上角的瓦片坐标系进行说明。</p>
+<p>瓦片的编码方式如下图所示，层级用z表示，瓦片经线方向（<em>指瓦片经度发生变化的方法，即东西向，东向为正</em>）上编号为x，纬线方向（指瓦片维度发生变化的方向，即南北向，南向为正）上编号为y，因此每一个瓦片都可以通过一个三维元组（x,y,z）来唯一描述。</p>
+<p><img loading="lazy" src="https://zhou-fuyi.github.io/picx-images-hosting/%e7%93%a6%e7%89%87%e5%9d%90%e6%a0%87%e7%b3%bb1.8vmnzzropy.webp" alt="瓦片坐标系1"  />
+
+<img loading="lazy" src="https://zhou-fuyi.github.io/picx-images-hosting/%e7%93%a6%e7%89%87%e5%9d%90%e6%a0%87%e7%b3%bb2.7i04vygmpf.webp" alt="瓦片坐标系2"  />
+
+<img loading="lazy" src="https://zhou-fuyi.github.io/picx-images-hosting/%e7%93%a6%e7%89%87%e5%9d%90%e6%a0%87%e7%b3%bb3.6t6vbxt3pb.webp" alt="瓦片坐标系3"  />
+</p>
+<blockquote>
+<p>💡 节选自《高性能影像数据瓦片化关键技术研究-刘世永-2016》，章节：第二章，2.1-2.3</p>
+</blockquote>
+<h4 id="瓦片金字塔程序模型">瓦片金字塔程序模型<a hidden class="anchor" aria-hidden="true" href="#瓦片金字塔程序模型">#</a></h4>
+<p>此处只显示核心模块</p>
+<ul>
+<li>
+<p>Grid，对应单层金字塔</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-java" data-lang="java"><span class="line"><span class="cl"><span class="c1">// 指定层级横向的瓦片数量</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="kd">private</span><span class="w"> </span><span class="kt">long</span><span class="w"> </span><span class="n">numTilesWide</span><span class="p">;</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="c1">// 指定层级纵向的瓦片数量</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="kd">private</span><span class="w"> </span><span class="kt">long</span><span class="w"> </span><span class="n">numTilesHigh</span><span class="p">;</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="c1">// 分辨率</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="kd">private</span><span class="w"> </span><span class="kt">double</span><span class="w"> </span><span class="n">resolution</span><span class="p">;</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="c1">// 比例尺分母</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="kd">private</span><span class="w"> </span><span class="kt">double</span><span class="w"> </span><span class="n">scaleDenom</span><span class="p">;</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="kd">private</span><span class="w"> </span><span class="n">String</span><span class="w"> </span><span class="n">name</span><span class="p">;</span><span class="w">
+</span></span></span></code></pre></div></li>
+<li>
+<p>GridSet，对应完整的金字塔层级</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-java" data-lang="java"><span class="line"><span class="cl"><span class="c1">// 名称</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="kd">private</span><span class="w"> </span><span class="n">String</span><span class="w"> </span><span class="n">name</span><span class="p">;</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="kd">private</span><span class="w"> </span><span class="n">SRS</span><span class="w"> </span><span class="n">srs</span><span class="p">;</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="c1">// 瓦片宽度，一般为256</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="kd">private</span><span class="w"> </span><span class="kt">int</span><span class="w"> </span><span class="n">tileWidth</span><span class="p">;</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="c1">// 瓦片高度，一般为256</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="kd">private</span><span class="w"> </span><span class="kt">int</span><span class="w"> </span><span class="n">tileHeight</span><span class="p">;</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="kd">protected</span><span class="w"> </span><span class="kt">boolean</span><span class="w"> </span><span class="n">yBaseToggle</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="kc">false</span><span class="p">;</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="kd">private</span><span class="w"> </span><span class="kt">boolean</span><span class="w"> </span><span class="n">yCoordinateFirst</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="kc">false</span><span class="p">;</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="kd">private</span><span class="w"> </span><span class="kt">boolean</span><span class="w"> </span><span class="n">scaleWarning</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="kc">false</span><span class="p">;</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="kd">private</span><span class="w"> </span><span class="kt">double</span><span class="w"> </span><span class="n">metersPerUnit</span><span class="p">;</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="kd">private</span><span class="w"> </span><span class="kt">double</span><span class="w"> </span><span class="n">pixelSize</span><span class="p">;</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="c1">// 数据范围</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="kd">private</span><span class="w"> </span><span class="n">BoundingBox</span><span class="w"> </span><span class="n">originalExtent</span><span class="p">;</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="kd">private</span><span class="w"> </span><span class="n">Grid</span><span class="o">[]</span><span class="w"> </span><span class="n">gridLevels</span><span class="p">;</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="kd">private</span><span class="w"> </span><span class="n">String</span><span class="w"> </span><span class="n">description</span><span class="p">;</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="kd">private</span><span class="w"> </span><span class="kt">boolean</span><span class="w"> </span><span class="n">resolutionsPreserved</span><span class="p">;</span><span class="w">
+</span></span></span></code></pre></div></li>
+</ul>
+<h4 id="瓦片金字塔逻辑模型构建">瓦片金字塔逻辑模型构建<a hidden class="anchor" aria-hidden="true" href="#瓦片金字塔逻辑模型构建">#</a></h4>
+<p>瓦片金字塔需要又逻辑模型与物理模型共同构成，物理模型（即瓦片集）需要根据逻辑模型的定义才可进行构建。此处以常规瓦片金字塔逻辑模型为示例，通过上述程序模型，构建瓦片金字塔逻辑模型</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-java" data-lang="java"><span class="line"><span class="cl"><span class="c1">// Pixel size (to calculate scales). The default is 0.28mm/pixel, corresponding to 90.71428571428572 DPI.</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="kd">public</span><span class="w"> </span><span class="kd">static</span><span class="w"> </span><span class="n">GridSet</span><span class="w"> </span><span class="nf">buildGriDSet</span><span class="p">(</span><span class="n">SRS</span><span class="w"> </span><span class="n">srs</span><span class="p">,</span><span class="w"> </span><span class="kt">double</span><span class="w"> </span><span class="n">pixelSize</span><span class="p">)</span><span class="w"> </span><span class="p">{</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="k">return</span><span class="w"> </span><span class="n">GridSetFactory</span><span class="p">.</span><span class="na">createGridSet</span><span class="p">(</span><span class="n">String</span><span class="p">.</span><span class="na">valueOf</span><span class="p">(</span><span class="n">srs</span><span class="p">.</span><span class="na">getNumber</span><span class="p">()),</span><span class="w"> </span><span class="n">srs</span><span class="p">,</span><span class="w"> </span><span class="n">BoundingBox</span><span class="p">.</span><span class="na">WORLD3857</span><span class="p">,</span><span class="w"> </span><span class="kc">false</span><span class="p">,</span><span class="w"> </span><span class="n">30</span><span class="p">,</span><span class="w"> </span><span class="kc">null</span><span class="p">,</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">            </span><span class="n">pixelSize</span><span class="p">,</span><span class="w"> </span><span class="n">256</span><span class="p">,</span><span class="w"> </span><span class="n">256</span><span class="p">,</span><span class="w"> </span><span class="kc">false</span><span class="p">);</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="p">}</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="c1">// 需要将其转换为米</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="n">buildGriDSet</span><span class="p">(</span><span class="n">SRS</span><span class="p">.</span><span class="na">getEPSG900913</span><span class="p">(),</span><span class="w"> </span><span class="n">0</span><span class="p">.</span><span class="na">00028D</span><span class="p">);</span><span class="w">
+</span></span></span></code></pre></div><div class="highlight"><pre tabindex="0" class="chroma"><code class="language-java" data-lang="java"><span class="line"><span class="cl"><span class="kd">public</span><span class="w"> </span><span class="kd">static</span><span class="w"> </span><span class="n">GridSet</span><span class="w"> </span><span class="nf">createGridSet</span><span class="p">(</span><span class="n">String</span><span class="w"> </span><span class="n">name</span><span class="p">,</span><span class="w"> </span><span class="n">SRS</span><span class="w"> </span><span class="n">srs</span><span class="p">,</span><span class="w"> </span><span class="n">BoundingBox</span><span class="w"> </span><span class="n">extent</span><span class="p">,</span><span class="w"> </span><span class="kt">boolean</span><span class="w"> </span><span class="n">alignTopLeft</span><span class="p">,</span><span class="w"> </span><span class="kt">int</span><span class="w"> </span><span class="n">levels</span><span class="p">,</span><span class="w"> </span><span class="n">Double</span><span class="w"> </span><span class="n">metersPerUnit</span><span class="p">,</span><span class="w"> </span><span class="kt">double</span><span class="w"> </span><span class="n">pixelSize</span><span class="p">,</span><span class="w"> </span><span class="kt">int</span><span class="w"> </span><span class="n">tileWidth</span><span class="p">,</span><span class="w"> </span><span class="kt">int</span><span class="w"> </span><span class="n">tileHeight</span><span class="p">,</span><span class="w"> </span><span class="kt">boolean</span><span class="w"> </span><span class="n">yCoordinateFirst</span><span class="p">)</span><span class="w"> </span><span class="p">{</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="kt">double</span><span class="w"> </span><span class="n">extentWidth</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">extent</span><span class="p">.</span><span class="na">getWidth</span><span class="p">();</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="kt">double</span><span class="w"> </span><span class="n">extentHeight</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">extent</span><span class="p">.</span><span class="na">getHeight</span><span class="p">();</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="kt">double</span><span class="w"> </span><span class="n">resX</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">extentWidth</span><span class="w"> </span><span class="o">/</span><span class="w"> </span><span class="p">(</span><span class="kt">double</span><span class="p">)</span><span class="n">tileWidth</span><span class="p">;</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="kt">double</span><span class="w"> </span><span class="n">resY</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">extentHeight</span><span class="w"> </span><span class="o">/</span><span class="w"> </span><span class="p">(</span><span class="kt">double</span><span class="p">)</span><span class="n">tileHeight</span><span class="p">;</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="kt">int</span><span class="w"> </span><span class="n">tilesWide</span><span class="p">;</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="kt">int</span><span class="w"> </span><span class="n">tilesHigh</span><span class="p">;</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="c1">// 计算调整的基数, 以小边为主</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">resX</span><span class="w"> </span><span class="o">&lt;=</span><span class="w"> </span><span class="n">resY</span><span class="p">)</span><span class="w"> </span><span class="p">{</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">        </span><span class="n">tilesWide</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">1</span><span class="p">;</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">        </span><span class="n">tilesHigh</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">(</span><span class="kt">int</span><span class="p">)</span><span class="n">Math</span><span class="p">.</span><span class="na">round</span><span class="p">(</span><span class="n">resY</span><span class="w"> </span><span class="o">/</span><span class="w"> </span><span class="n">resX</span><span class="p">);</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">        </span><span class="n">resY</span><span class="w"> </span><span class="o">/=</span><span class="w"> </span><span class="p">(</span><span class="kt">double</span><span class="p">)</span><span class="n">tilesHigh</span><span class="p">;</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="p">}</span><span class="w"> </span><span class="k">else</span><span class="w"> </span><span class="p">{</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">        </span><span class="n">tilesHigh</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">1</span><span class="p">;</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">        </span><span class="n">tilesWide</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">(</span><span class="kt">int</span><span class="p">)</span><span class="n">Math</span><span class="p">.</span><span class="na">round</span><span class="p">(</span><span class="n">resX</span><span class="w"> </span><span class="o">/</span><span class="w"> </span><span class="n">resY</span><span class="p">);</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">        </span><span class="n">resX</span><span class="w"> </span><span class="o">/=</span><span class="w"> </span><span class="p">(</span><span class="kt">double</span><span class="p">)</span><span class="n">tilesWide</span><span class="p">;</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="p">}</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="c1">// 计算地图分辨率, 即单位像素内表示的地图单位(米或度)</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="kt">double</span><span class="w"> </span><span class="n">res</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">Math</span><span class="p">.</span><span class="na">max</span><span class="p">(</span><span class="n">resX</span><span class="p">,</span><span class="w"> </span><span class="n">resY</span><span class="p">);</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="c1">// 获取裁减后的范围</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="kt">double</span><span class="w"> </span><span class="n">adjustedExtentWidth</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">(</span><span class="kt">double</span><span class="p">)(</span><span class="n">tilesWide</span><span class="w"> </span><span class="o">*</span><span class="w"> </span><span class="n">tileWidth</span><span class="p">)</span><span class="w"> </span><span class="o">*</span><span class="w"> </span><span class="n">res</span><span class="p">;</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="kt">double</span><span class="w"> </span><span class="n">adjustedExtentHeight</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">(</span><span class="kt">double</span><span class="p">)(</span><span class="n">tilesHigh</span><span class="w"> </span><span class="o">*</span><span class="w"> </span><span class="n">tileHeight</span><span class="p">)</span><span class="w"> </span><span class="o">*</span><span class="w"> </span><span class="n">res</span><span class="p">;</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="c1">// 根据上述范围重新构建范围表达</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="n">BoundingBox</span><span class="w"> </span><span class="n">adjExtent</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="k">new</span><span class="w"> </span><span class="n">BoundingBox</span><span class="p">(</span><span class="n">extent</span><span class="p">);</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="n">adjExtent</span><span class="p">.</span><span class="na">setMaxX</span><span class="p">(</span><span class="n">adjExtent</span><span class="p">.</span><span class="na">getMinX</span><span class="p">()</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="n">adjustedExtentWidth</span><span class="p">);</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="c1">// 这里想要表达的就是原点在于左上角还是左下角（确定起算位置）, 因为这样会影响y方向上的范围计算。就是进行y方向上范围计算</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">alignTopLeft</span><span class="p">)</span><span class="w"> </span><span class="p">{</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">        </span><span class="n">adjExtent</span><span class="p">.</span><span class="na">setMinY</span><span class="p">(</span><span class="n">adjExtent</span><span class="p">.</span><span class="na">getMaxY</span><span class="p">()</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="n">adjustedExtentHeight</span><span class="p">);</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="p">}</span><span class="w"> </span><span class="k">else</span><span class="w"> </span><span class="p">{</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">        </span><span class="n">adjExtent</span><span class="p">.</span><span class="na">setMaxY</span><span class="p">(</span><span class="n">adjExtent</span><span class="p">.</span><span class="na">getMinY</span><span class="p">()</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="n">adjustedExtentHeight</span><span class="p">);</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="p">}</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="c1">// 根据给定的层级参数, 构建各层级下分辨率值</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="kt">double</span><span class="o">[]</span><span class="w"> </span><span class="n">resolutions</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="k">new</span><span class="w"> </span><span class="kt">double</span><span class="o">[</span><span class="n">levels</span><span class="o">]</span><span class="p">;</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="c1">// 设置0级的分辨率</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="n">resolutions</span><span class="o">[</span><span class="n">0</span><span class="o">]</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">res</span><span class="p">;</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="k">for</span><span class="p">(</span><span class="kt">int</span><span class="w"> </span><span class="n">i</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">1</span><span class="p">;</span><span class="w"> </span><span class="n">i</span><span class="w"> </span><span class="o">&lt;</span><span class="w"> </span><span class="n">levels</span><span class="p">;</span><span class="w"> </span><span class="o">++</span><span class="n">i</span><span class="p">)</span><span class="w"> </span><span class="p">{</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">        </span><span class="c1">// 采用常规均匀四分（四叉树）方式进行构建</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">        </span><span class="n">resolutions</span><span class="o">[</span><span class="n">i</span><span class="o">]</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">resolutions</span><span class="o">[</span><span class="n">i</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="n">1</span><span class="o">]</span><span class="w"> </span><span class="o">/</span><span class="w"> </span><span class="n">2</span><span class="p">.</span><span class="na">0D</span><span class="p">;</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="p">}</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="k">return</span><span class="w"> </span><span class="n">createGridSet</span><span class="p">(</span><span class="n">name</span><span class="p">,</span><span class="w"> </span><span class="n">srs</span><span class="p">,</span><span class="w"> </span><span class="n">adjExtent</span><span class="p">,</span><span class="w"> </span><span class="n">alignTopLeft</span><span class="p">,</span><span class="w"> </span><span class="n">resolutions</span><span class="p">,</span><span class="w"> </span><span class="p">(</span><span class="kt">double</span><span class="o">[]</span><span class="p">)</span><span class="kc">null</span><span class="p">,</span><span class="w"> </span><span class="n">metersPerUnit</span><span class="p">,</span><span class="w"> </span><span class="n">pixelSize</span><span class="p">,</span><span class="w"> </span><span class="p">(</span><span class="n">String</span><span class="o">[]</span><span class="p">)</span><span class="kc">null</span><span class="p">,</span><span class="w"> </span><span class="n">tileWidth</span><span class="p">,</span><span class="w"> </span><span class="n">tileHeight</span><span class="p">,</span><span class="w"> </span><span class="n">yCoordinateFirst</span><span class="p">);</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="p">}</span><span class="w">
+</span></span></span></code></pre></div><div class="highlight"><pre tabindex="0" class="chroma"><code class="language-java" data-lang="java"><span class="line"><span class="cl"><span class="kd">public</span><span class="w"> </span><span class="kd">static</span><span class="w"> </span><span class="n">GridSet</span><span class="w"> </span><span class="nf">createGridSet</span><span class="p">(</span><span class="n">String</span><span class="w"> </span><span class="n">name</span><span class="p">,</span><span class="w"> </span><span class="n">SRS</span><span class="w"> </span><span class="n">srs</span><span class="p">,</span><span class="w"> </span><span class="n">BoundingBox</span><span class="w"> </span><span class="n">extent</span><span class="p">,</span><span class="w"> </span><span class="kt">boolean</span><span class="w"> </span><span class="n">alignTopLeft</span><span class="p">,</span><span class="w"> </span><span class="kt">double</span><span class="o">[]</span><span class="w"> </span><span class="n">resolutions</span><span class="p">,</span><span class="w"> </span><span class="kt">double</span><span class="o">[]</span><span class="w"> </span><span class="n">scaleDenoms</span><span class="p">,</span><span class="w"> </span><span class="n">Double</span><span class="w"> </span><span class="n">metersPerUnit</span><span class="p">,</span><span class="w"> </span><span class="kt">double</span><span class="w"> </span><span class="n">pixelSize</span><span class="p">,</span><span class="w"> </span><span class="n">String</span><span class="o">[]</span><span class="w"> </span><span class="n">scaleNames</span><span class="p">,</span><span class="w"> </span><span class="kt">int</span><span class="w"> </span><span class="n">tileWidth</span><span class="p">,</span><span class="w"> </span><span class="kt">int</span><span class="w"> </span><span class="n">tileHeight</span><span class="p">,</span><span class="w"> </span><span class="kt">boolean</span><span class="w"> </span><span class="n">yCoordinateFirst</span><span class="p">)</span><span class="w"> </span><span class="p">{</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="n">Assert</span><span class="p">.</span><span class="na">notNull</span><span class="p">(</span><span class="n">name</span><span class="p">,</span><span class="w"> </span><span class="s">&#34;name is null&#34;</span><span class="p">);</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="n">Assert</span><span class="p">.</span><span class="na">notNull</span><span class="p">(</span><span class="n">srs</span><span class="p">,</span><span class="w"> </span><span class="s">&#34;srs is null&#34;</span><span class="p">);</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="n">Assert</span><span class="p">.</span><span class="na">notNull</span><span class="p">(</span><span class="n">extent</span><span class="p">,</span><span class="w"> </span><span class="s">&#34;extent is null&#34;</span><span class="p">);</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="n">Assert</span><span class="p">.</span><span class="na">isTrue</span><span class="p">(</span><span class="o">!</span><span class="n">extent</span><span class="p">.</span><span class="na">isNull</span><span class="p">()</span><span class="w"> </span><span class="o">&amp;&amp;</span><span class="w"> </span><span class="n">extent</span><span class="p">.</span><span class="na">isSane</span><span class="p">(),</span><span class="w"> </span><span class="s">&#34;Extent is invalid: &#34;</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="n">extent</span><span class="p">);</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="n">Assert</span><span class="p">.</span><span class="na">isTrue</span><span class="p">(</span><span class="n">resolutions</span><span class="w"> </span><span class="o">!=</span><span class="w"> </span><span class="kc">null</span><span class="w"> </span><span class="o">||</span><span class="w"> </span><span class="n">scaleDenoms</span><span class="w"> </span><span class="o">!=</span><span class="w"> </span><span class="kc">null</span><span class="p">,</span><span class="w"> </span><span class="s">&#34;The gridset definition must have either resolutions or scale denominators&#34;</span><span class="p">);</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="n">Assert</span><span class="p">.</span><span class="na">isTrue</span><span class="p">(</span><span class="n">resolutions</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="kc">null</span><span class="w"> </span><span class="o">||</span><span class="w"> </span><span class="n">scaleDenoms</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="kc">null</span><span class="p">,</span><span class="w"> </span><span class="s">&#34;Only one of resolutions or scaleDenoms should be provided, not both&#34;</span><span class="p">);</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="kt">int</span><span class="w"> </span><span class="n">i</span><span class="p">;</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="k">for</span><span class="p">(</span><span class="n">i</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">1</span><span class="p">;</span><span class="w"> </span><span class="n">resolutions</span><span class="w"> </span><span class="o">!=</span><span class="w"> </span><span class="kc">null</span><span class="w"> </span><span class="o">&amp;&amp;</span><span class="w"> </span><span class="n">i</span><span class="w"> </span><span class="o">&lt;</span><span class="w"> </span><span class="n">resolutions</span><span class="p">.</span><span class="na">length</span><span class="p">;</span><span class="w"> </span><span class="o">++</span><span class="n">i</span><span class="p">)</span><span class="w"> </span><span class="p">{</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">        </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">resolutions</span><span class="o">[</span><span class="n">i</span><span class="o">]</span><span class="w"> </span><span class="o">&gt;=</span><span class="w"> </span><span class="n">resolutions</span><span class="o">[</span><span class="n">i</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="n">1</span><span class="o">]</span><span class="p">)</span><span class="w"> </span><span class="p">{</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">            </span><span class="k">throw</span><span class="w"> </span><span class="k">new</span><span class="w"> </span><span class="n">IllegalArgumentException</span><span class="p">(</span><span class="s">&#34;Each resolution should be lower than it&#39;s prior one. Res[&#34;</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="n">i</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="s">&#34;] == &#34;</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="n">resolutions</span><span class="o">[</span><span class="n">i</span><span class="o">]</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="s">&#34;, Res[&#34;</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="p">(</span><span class="n">i</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="n">1</span><span class="p">)</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="s">&#34;] == &#34;</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="n">resolutions</span><span class="o">[</span><span class="n">i</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="n">1</span><span class="o">]</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="s">&#34;.&#34;</span><span class="p">);</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">        </span><span class="p">}</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="p">}</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="k">for</span><span class="p">(</span><span class="n">i</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">1</span><span class="p">;</span><span class="w"> </span><span class="n">scaleDenoms</span><span class="w"> </span><span class="o">!=</span><span class="w"> </span><span class="kc">null</span><span class="w"> </span><span class="o">&amp;&amp;</span><span class="w"> </span><span class="n">i</span><span class="w"> </span><span class="o">&lt;</span><span class="w"> </span><span class="n">scaleDenoms</span><span class="p">.</span><span class="na">length</span><span class="p">;</span><span class="w"> </span><span class="o">++</span><span class="n">i</span><span class="p">)</span><span class="w"> </span><span class="p">{</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">        </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">scaleDenoms</span><span class="o">[</span><span class="n">i</span><span class="o">]</span><span class="w"> </span><span class="o">&gt;=</span><span class="w"> </span><span class="n">scaleDenoms</span><span class="o">[</span><span class="n">i</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="n">1</span><span class="o">]</span><span class="p">)</span><span class="w"> </span><span class="p">{</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">            </span><span class="k">throw</span><span class="w"> </span><span class="k">new</span><span class="w"> </span><span class="n">IllegalArgumentException</span><span class="p">(</span><span class="s">&#34;Each scale denominator should be lower than it&#39;s prior one. Scale[&#34;</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="n">i</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="s">&#34;] == &#34;</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="n">scaleDenoms</span><span class="o">[</span><span class="n">i</span><span class="o">]</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="s">&#34;, Scale[&#34;</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="p">(</span><span class="n">i</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="n">1</span><span class="p">)</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="s">&#34;] == &#34;</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="n">scaleDenoms</span><span class="o">[</span><span class="n">i</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="n">1</span><span class="o">]</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="s">&#34;.&#34;</span><span class="p">);</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">        </span><span class="p">}</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="p">}</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="n">GridSet</span><span class="w"> </span><span class="n">gridSet</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">baseGridSet</span><span class="p">(</span><span class="n">name</span><span class="p">,</span><span class="w"> </span><span class="n">srs</span><span class="p">,</span><span class="w"> </span><span class="n">tileWidth</span><span class="p">,</span><span class="w"> </span><span class="n">tileHeight</span><span class="p">);</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="c1">// true：保留分辨率并计算 scaleDenominators</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="c1">// false：分辨率是根据 sacale 分母计算的</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="n">gridSet</span><span class="p">.</span><span class="na">setResolutionsPreserved</span><span class="p">(</span><span class="n">resolutions</span><span class="w"> </span><span class="o">!=</span><span class="w"> </span><span class="kc">null</span><span class="p">);</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="n">gridSet</span><span class="p">.</span><span class="na">setPixelSize</span><span class="p">(</span><span class="n">pixelSize</span><span class="p">);</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="n">gridSet</span><span class="p">.</span><span class="na">setOriginalExtent</span><span class="p">(</span><span class="n">extent</span><span class="p">);</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="c1">// tileOrigin()的y坐标是在顶部（true）还是在底部（false），相应的标记原点位置</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="n">gridSet</span><span class="p">.</span><span class="na">yBaseToggle</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">alignTopLeft</span><span class="p">;</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="c1">// 轴顺序, 默认经度优先</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="n">gridSet</span><span class="p">.</span><span class="na">setyCoordinateFirst</span><span class="p">(</span><span class="n">yCoordinateFirst</span><span class="p">);</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="c1">// 设置单位, 每个单位内表示多少米</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="c1">// 经纬度直投的情况需要特殊处理</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">metersPerUnit</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="kc">null</span><span class="p">)</span><span class="w"> </span><span class="p">{</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">        </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">srs</span><span class="p">.</span><span class="na">equals</span><span class="p">(</span><span class="n">SRS</span><span class="p">.</span><span class="na">getEPSG4326</span><span class="p">()))</span><span class="w"> </span><span class="p">{</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">            </span><span class="n">gridSet</span><span class="p">.</span><span class="na">setMetersPerUnit</span><span class="p">(</span><span class="n">111319</span><span class="p">.</span><span class="na">49079327358D</span><span class="p">);</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">        </span><span class="p">}</span><span class="w"> </span><span class="k">else</span><span class="w"> </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">srs</span><span class="p">.</span><span class="na">equals</span><span class="p">(</span><span class="n">SRS</span><span class="p">.</span><span class="na">getEPSG3857</span><span class="p">()))</span><span class="w"> </span><span class="p">{</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">            </span><span class="n">gridSet</span><span class="p">.</span><span class="na">setMetersPerUnit</span><span class="p">(</span><span class="n">1</span><span class="p">.</span><span class="na">0D</span><span class="p">);</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">        </span><span class="p">}</span><span class="w"> </span><span class="k">else</span><span class="w"> </span><span class="p">{</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">            </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">resolutions</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="kc">null</span><span class="p">)</span><span class="w"> </span><span class="p">{</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">                </span><span class="n">log</span><span class="p">.</span><span class="na">config</span><span class="p">(</span><span class="s">&#34;GridSet &#34;</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="n">name</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="s">&#34; was defined without metersPerUnit, assuming 1m/unit. All scales will be off if this is incorrect.&#34;</span><span class="p">);</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">            </span><span class="p">}</span><span class="w"> </span><span class="k">else</span><span class="w"> </span><span class="p">{</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">                </span><span class="n">log</span><span class="p">.</span><span class="na">config</span><span class="p">(</span><span class="s">&#34;GridSet &#34;</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="n">name</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="s">&#34; was defined without metersPerUnit. Assuming 1m per SRS unit for WMTS scale output.&#34;</span><span class="p">);</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">                </span><span class="n">gridSet</span><span class="p">.</span><span class="na">setScaleWarning</span><span class="p">(</span><span class="kc">true</span><span class="p">);</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">            </span><span class="p">}</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">            </span><span class="n">gridSet</span><span class="p">.</span><span class="na">setMetersPerUnit</span><span class="p">(</span><span class="n">1</span><span class="p">.</span><span class="na">0D</span><span class="p">);</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">        </span><span class="p">}</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="p">}</span><span class="w"> </span><span class="k">else</span><span class="w"> </span><span class="p">{</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">        </span><span class="n">gridSet</span><span class="p">.</span><span class="na">setMetersPerUnit</span><span class="p">(</span><span class="n">metersPerUnit</span><span class="p">);</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="p">}</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">resolutions</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="kc">null</span><span class="p">)</span><span class="w"> </span><span class="p">{</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">        </span><span class="n">gridSet</span><span class="p">.</span><span class="na">setGridLevels</span><span class="p">(</span><span class="k">new</span><span class="w"> </span><span class="n">Grid</span><span class="o">[</span><span class="n">scaleDenoms</span><span class="p">.</span><span class="na">length</span><span class="o">]</span><span class="p">);</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="p">}</span><span class="w"> </span><span class="k">else</span><span class="w"> </span><span class="p">{</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">        </span><span class="n">gridSet</span><span class="p">.</span><span class="na">setGridLevels</span><span class="p">(</span><span class="k">new</span><span class="w"> </span><span class="n">Grid</span><span class="o">[</span><span class="n">resolutions</span><span class="p">.</span><span class="na">length</span><span class="o">]</span><span class="p">);</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="p">}</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="k">for</span><span class="p">(</span><span class="n">i</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">0</span><span class="p">;</span><span class="w"> </span><span class="n">i</span><span class="w"> </span><span class="o">&lt;</span><span class="w"> </span><span class="n">gridSet</span><span class="p">.</span><span class="na">getNumLevels</span><span class="p">();</span><span class="w"> </span><span class="o">++</span><span class="n">i</span><span class="p">)</span><span class="w"> </span><span class="p">{</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">        </span><span class="n">Grid</span><span class="w"> </span><span class="n">curGrid</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="k">new</span><span class="w"> </span><span class="n">Grid</span><span class="p">();</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">        </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">scaleDenoms</span><span class="w"> </span><span class="o">!=</span><span class="w"> </span><span class="kc">null</span><span class="p">)</span><span class="w"> </span><span class="p">{</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">            </span><span class="n">curGrid</span><span class="p">.</span><span class="na">setScaleDenominator</span><span class="p">(</span><span class="n">scaleDenoms</span><span class="o">[</span><span class="n">i</span><span class="o">]</span><span class="p">);</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">            </span><span class="n">curGrid</span><span class="p">.</span><span class="na">setResolution</span><span class="p">(</span><span class="n">pixelSize</span><span class="w"> </span><span class="o">*</span><span class="w"> </span><span class="p">(</span><span class="n">scaleDenoms</span><span class="o">[</span><span class="n">i</span><span class="o">]</span><span class="w"> </span><span class="o">/</span><span class="w"> </span><span class="n">gridSet</span><span class="p">.</span><span class="na">getMetersPerUnit</span><span class="p">()));</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">        </span><span class="p">}</span><span class="w"> </span><span class="k">else</span><span class="w"> </span><span class="p">{</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">            </span><span class="n">curGrid</span><span class="p">.</span><span class="na">setResolution</span><span class="p">(</span><span class="n">resolutions</span><span class="o">[</span><span class="n">i</span><span class="o">]</span><span class="p">);</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">            </span><span class="c1">// 计算比例尺 (单位像素下表示的实际空间距离 * 每个单位情况表示多少米) / (像素大小，或称像元大小)</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">            </span><span class="c1">// 约去像元, 即获取到比例尺分母</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">            </span><span class="n">curGrid</span><span class="p">.</span><span class="na">setScaleDenominator</span><span class="p">(</span><span class="n">resolutions</span><span class="o">[</span><span class="n">i</span><span class="o">]</span><span class="w"> </span><span class="o">*</span><span class="w"> </span><span class="n">gridSet</span><span class="p">.</span><span class="na">getMetersPerUnit</span><span class="p">()</span><span class="w"> </span><span class="o">/</span><span class="w"> </span><span class="n">2</span><span class="p">.</span><span class="na">8E</span><span class="o">-</span><span class="n">4D</span><span class="p">);</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">        </span><span class="p">}</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">        </span><span class="kt">double</span><span class="w"> </span><span class="n">mapUnitWidth</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">(</span><span class="kt">double</span><span class="p">)</span><span class="n">tileWidth</span><span class="w"> </span><span class="o">*</span><span class="w"> </span><span class="n">curGrid</span><span class="p">.</span><span class="na">getResolution</span><span class="p">();</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">        </span><span class="kt">double</span><span class="w"> </span><span class="n">mapUnitHeight</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">(</span><span class="kt">double</span><span class="p">)</span><span class="n">tileHeight</span><span class="w"> </span><span class="o">*</span><span class="w"> </span><span class="n">curGrid</span><span class="p">.</span><span class="na">getResolution</span><span class="p">();</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">        </span><span class="kt">long</span><span class="w"> </span><span class="n">tilesWide</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">(</span><span class="kt">long</span><span class="p">)</span><span class="n">Math</span><span class="p">.</span><span class="na">ceil</span><span class="p">((</span><span class="n">extent</span><span class="p">.</span><span class="na">getWidth</span><span class="p">()</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="n">mapUnitWidth</span><span class="w"> </span><span class="o">*</span><span class="w"> </span><span class="n">0</span><span class="p">.</span><span class="na">01D</span><span class="p">)</span><span class="w"> </span><span class="o">/</span><span class="w"> </span><span class="n">mapUnitWidth</span><span class="p">);</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">        </span><span class="kt">long</span><span class="w"> </span><span class="n">tilesHigh</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">(</span><span class="kt">long</span><span class="p">)</span><span class="n">Math</span><span class="p">.</span><span class="na">ceil</span><span class="p">((</span><span class="n">extent</span><span class="p">.</span><span class="na">getHeight</span><span class="p">()</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="n">mapUnitHeight</span><span class="w"> </span><span class="o">*</span><span class="w"> </span><span class="n">0</span><span class="p">.</span><span class="na">01D</span><span class="p">)</span><span class="w"> </span><span class="o">/</span><span class="w"> </span><span class="n">mapUnitHeight</span><span class="p">);</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">        </span><span class="n">curGrid</span><span class="p">.</span><span class="na">setNumTilesWide</span><span class="p">(</span><span class="n">tilesWide</span><span class="p">);</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">        </span><span class="n">curGrid</span><span class="p">.</span><span class="na">setNumTilesHigh</span><span class="p">(</span><span class="n">tilesHigh</span><span class="p">);</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">        </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">scaleNames</span><span class="w"> </span><span class="o">!=</span><span class="w"> </span><span class="kc">null</span><span class="w"> </span><span class="o">&amp;&amp;</span><span class="w"> </span><span class="n">scaleNames</span><span class="o">[</span><span class="n">i</span><span class="o">]</span><span class="w"> </span><span class="o">!=</span><span class="w"> </span><span class="kc">null</span><span class="p">)</span><span class="w"> </span><span class="p">{</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">            </span><span class="n">curGrid</span><span class="p">.</span><span class="na">setName</span><span class="p">(</span><span class="n">scaleNames</span><span class="o">[</span><span class="n">i</span><span class="o">]</span><span class="p">);</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">        </span><span class="p">}</span><span class="w"> </span><span class="k">else</span><span class="w"> </span><span class="p">{</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">            </span><span class="n">curGrid</span><span class="p">.</span><span class="na">setName</span><span class="p">(</span><span class="n">gridSet</span><span class="p">.</span><span class="na">getName</span><span class="p">()</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="s">&#34;:&#34;</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="n">i</span><span class="p">);</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">        </span><span class="p">}</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">        </span><span class="n">gridSet</span><span class="p">.</span><span class="na">setGrid</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">curGrid</span><span class="p">);</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="p">}</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="k">return</span><span class="w"> </span><span class="n">gridSet</span><span class="p">;</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="p">}</span><span class="w">
+</span></span></span></code></pre></div><h3 id="矢量瓦片编解码模块">矢量瓦片编解码模块<a hidden class="anchor" aria-hidden="true" href="#矢量瓦片编解码模块">#</a></h3>
+<p>参考GeoServer实现，使用第三方编解码组件：<code>java-vector-tile</code></p>
+<p><a href="https://github.com/ElectronicChartCentre/java-vector-tile">https://github.com/ElectronicChartCentre/java-vector-tile</a></p>
+<h3 id="矢量数据查询">矢量数据查询<a hidden class="anchor" aria-hidden="true" href="#矢量数据查询">#</a></h3>
+<p>为了更快的实现开发，此处选择使用GeoTools提供的JDBC相关组件进行数据查询，核心类如下：</p>
+<ul>
+<li>JDBCDataStore</li>
+<li>VirtualTable：可以支持自定义SQL</li>
+<li>MathTransform</li>
+<li>ContentFeatureSource</li>
+<li>SimpleFeatureCollection</li>
+</ul>
+<p>主要逻辑步骤如下所示：</p>
+<ul>
+<li>通过JDBCDataStore创建VirtualTable实例</li>
+<li>根据GridSet将传入参数转为BoundingBox</li>
+<li>使用MathTransform将BoudingBox转换到源数据所对应的坐标系下</li>
+<li>构建查询对象，并使用上述创建的虚拟表实例（ContentFeatureSource）进行数据检索</li>
+<li>将检索的数据结果应用于矢量瓦片编码并返回结果</li>
+</ul>
+<h3 id="服务验证">服务验证<a hidden class="anchor" aria-hidden="true" href="#服务验证">#</a></h3>
+<p>叠加底图进行验证</p>
+<p><img loading="lazy" src="https://zhou-fuyi.github.io/picx-images-hosting/result1.3razaprrem.webp" alt="result1"  />
+
+<img loading="lazy" src="https://zhou-fuyi.github.io/picx-images-hosting/result2.7egiy8njxk.webp" alt="result2"  />
+</p>
+<h2 id="参考">参考<a hidden class="anchor" aria-hidden="true" href="#参考">#</a></h2>
+<ul>
+<li><a href="https://github.com/mapbox/vector-tile-spec">Mapbox Vector Tile Specification</a></li>
+<li><a href="https://github.com/mapbox/awesome-vector-tiles">awesome-vector-tiles</a></li>
+<li><a href="https://docs.mapbox.com/data/tilesets/guides/vector-tiles-standards/">Vector tiles standards</a></li>
+<li><a href="https://help.supermap.com/iDesktop/zh/tutorial/MapTiles/VectorTilesOverview/">矢量瓦片概述</a></li>
+<li><a href="https://zhuanlan.zhihu.com/p/512298212">WebGIS数据不切片或是时代必然</a></li>
+<li><a href="https://zhuanlan.zhihu.com/p/358192568">PostGIS矢量切片技术助力GIS可视化</a></li>
+<li><a href="https://github.com/geoserver/geoserver">Geoserver</a></li>
+<li><a href="https://blog.cyclemap.link/2020-01-25-tilebuffer/">Buffer around Vectortiles</a></li>
+<li><a href="https://www.geowebcache.org/docs/current/concepts/gridsets.html">Gridsets and Gridsubsets</a></li>
+<li><a href="https://www.maptiler.com/google-maps-coordinates-tile-bounds-projection/#3/15.00/50.00">Tiles à la Google Maps Coordinates, Tile Bounds and Projection</a></li>
+<li><a href="https://cntchen.github.io/2016/05/09/%E5%9B%BD%E5%86%85%E4%B8%BB%E8%A6%81%E5%9C%B0%E5%9B%BE%E7%93%A6%E7%89%87%E5%9D%90%E6%A0%87%E7%B3%BB%E5%AE%9A%E4%B9%89%E5%8F%8A%E8%AE%A1%E7%AE%97%E5%8E%9F%E7%90%86/">国内主要地图瓦片坐标系定义及计算原理</a></li>
+<li><a href="https://xcsf.github.io/blog/2020/06/12/%E7%93%A6%E7%89%87Tile%E5%9C%B0%E5%9B%BE%E5%8E%9F%E7%90%86/">瓦片(Tile)地图原理</a></li>
+</ul>
+
+
+  </div>
+
+  <footer class="post-footer">
+    <ul class="post-tags">
+      <li><a href="https://fuyi-atlas.github.io/tags/vector-tile/">Vector Tile</a></li>
+      <li><a href="https://fuyi-atlas.github.io/tags/service/">Service</a></li>
+    </ul>
+<nav class="paginav">
+  <a class="prev" href="https://fuyi-atlas.github.io/posts/program/micro-weather/005/">
+    <span class="title">« Prev</span>
+    <br>
+    <span>微天气—行政区划数据（一）</span>
+  </a>
+  <a class="next" href="https://fuyi-atlas.github.io/posts/program/geoserver/002/">
+    <span class="title">Next »</span>
+    <br>
+    <span>GeoServer开发环境搭建</span>
+  </a>
+</nav>
+
+  </footer>
+</article>
+    </main>
+    
+<footer class="footer">
+    <span>&copy; 2024 <a href="https://fuyi-atlas.github.io/">Fuyi Atlas</a></span>
+    <span>
+        Powered by
+        <a href="https://gohugo.io/" rel="noopener noreferrer" target="_blank">Hugo</a> &
+        <a href="https://github.com/adityatelange/hugo-PaperMod/" rel="noopener" target="_blank">PaperMod</a>
+    </span>
+</footer>
+<a href="#top" aria-label="go to top" title="Go to Top (Alt + G)" class="top-link" id="top-link" accesskey="g">
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 12 6" fill="currentColor">
+        <path d="M12 6H0l6-6z" />
+    </svg>
+</a>
+
+<script>
+    let menu = document.getElementById('menu')
+    if (menu) {
+        menu.scrollLeft = localStorage.getItem("menu-scroll-position");
+        menu.onscroll = function () {
+            localStorage.setItem("menu-scroll-position", menu.scrollLeft);
+        }
+    }
+
+    document.querySelectorAll('a[href^="#"]').forEach(anchor => {
+        anchor.addEventListener("click", function (e) {
+            e.preventDefault();
+            var id = this.getAttribute("href").substr(1);
+            if (!window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+                document.querySelector(`[id='${decodeURIComponent(id)}']`).scrollIntoView({
+                    behavior: "smooth"
+                });
+            } else {
+                document.querySelector(`[id='${decodeURIComponent(id)}']`).scrollIntoView();
+            }
+            if (id === "top") {
+                history.replaceState(null, null, " ");
+            } else {
+                history.pushState(null, null, `#${id}`);
+            }
+        });
+    });
+
+</script>
+<script>
+    var mybutton = document.getElementById("top-link");
+    window.onscroll = function () {
+        if (document.body.scrollTop > 800 || document.documentElement.scrollTop > 800) {
+            mybutton.style.visibility = "visible";
+            mybutton.style.opacity = "1";
+        } else {
+            mybutton.style.visibility = "hidden";
+            mybutton.style.opacity = "0";
+        }
+    };
+
+</script>
+<script>
+    document.getElementById("theme-toggle").addEventListener("click", () => {
+        if (document.body.className.includes("dark")) {
+            document.body.classList.remove('dark');
+            localStorage.setItem("pref-theme", 'light');
+        } else {
+            document.body.classList.add('dark');
+            localStorage.setItem("pref-theme", 'dark');
+        }
+    })
+
+</script>
+<script>
+    document.querySelectorAll('pre > code').forEach((codeblock) => {
+        const container = codeblock.parentNode.parentNode;
+
+        const copybutton = document.createElement('button');
+        copybutton.classList.add('copy-code');
+        copybutton.innerHTML = 'copy';
+
+        function copyingDone() {
+            copybutton.innerHTML = 'copied!';
+            setTimeout(() => {
+                copybutton.innerHTML = 'copy';
+            }, 2000);
+        }
+
+        copybutton.addEventListener('click', (cb) => {
+            if ('clipboard' in navigator) {
+                navigator.clipboard.writeText(codeblock.textContent);
+                copyingDone();
+                return;
+            }
+
+            const range = document.createRange();
+            range.selectNodeContents(codeblock);
+            const selection = window.getSelection();
+            selection.removeAllRanges();
+            selection.addRange(range);
+            try {
+                document.execCommand('copy');
+                copyingDone();
+            } catch (e) { };
+            selection.removeRange(range);
+        });
+
+        if (container.classList.contains("highlight")) {
+            container.appendChild(copybutton);
+        } else if (container.parentNode.firstChild == container) {
+            
+        } else if (codeblock.parentNode.parentNode.parentNode.parentNode.parentNode.nodeName == "TABLE") {
+            
+            codeblock.parentNode.parentNode.parentNode.parentNode.parentNode.appendChild(copybutton);
+        } else {
+            
+            codeblock.parentNode.appendChild(copybutton);
+        }
+    });
+</script>
+</body>
+
+</html>

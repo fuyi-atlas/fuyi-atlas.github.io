@@ -1,0 +1,404 @@
+<!DOCTYPE html>
+<html lang="en" dir="auto">
+
+<head><meta charset="utf-8">
+<meta http-equiv="X-UA-Compatible" content="IE=edge">
+<meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
+<meta name="robots" content="index, follow">
+<title>Gis | Fuyi Atlas</title>
+<meta name="keywords" content="">
+<meta name="description" content="Fuyi Atlas - https://github.com/fuyi-atlas/fuyi-atlas.github.io">
+<meta name="author" content="Fuyi">
+<link rel="canonical" href="https://fuyi-atlas.github.io/categories/gis/">
+<link crossorigin="anonymous" href="/assets/css/stylesheet.a61ecc0df414536d559b3d0ca421e2b1de8f39b8a4910b32fedccecbc2c0d59c.css" integrity="sha256-ph7MDfQUU21Vmz0MpCHisd6PObikkQsy/tzOy8LA1Zw=" rel="preload stylesheet" as="style">
+<link rel="icon" href="https://fuyi-atlas.github.io/favicon.ico">
+<link rel="icon" type="image/png" sizes="16x16" href="https://fuyi-atlas.github.io/favicon-16x16.png">
+<link rel="icon" type="image/png" sizes="32x32" href="https://fuyi-atlas.github.io/favicon-32x32.png">
+<link rel="apple-touch-icon" href="https://fuyi-atlas.github.io/apple-touch-icon.png">
+<link rel="mask-icon" href="https://fuyi-atlas.github.io/safari-pinned-tab.svg">
+<meta name="theme-color" content="#2e2e33">
+<meta name="msapplication-TileColor" content="#2e2e33">
+<link rel="alternate" type="application/rss+xml" href="https://fuyi-atlas.github.io/categories/gis/index.xml">
+<link rel="alternate" hreflang="en" href="https://fuyi-atlas.github.io/categories/gis/">
+<noscript>
+    <style>
+        #theme-toggle,
+        .top-link {
+            display: none;
+        }
+
+    </style>
+    <style>
+        @media (prefers-color-scheme: dark) {
+            :root {
+                --theme: rgb(29, 30, 32);
+                --entry: rgb(46, 46, 51);
+                --primary: rgb(218, 218, 219);
+                --secondary: rgb(155, 156, 157);
+                --tertiary: rgb(65, 66, 68);
+                --content: rgb(196, 196, 197);
+                --code-block-bg: rgb(46, 46, 51);
+                --code-bg: rgb(55, 56, 62);
+                --border: rgb(51, 51, 51);
+            }
+
+            .list {
+                background: var(--theme);
+            }
+
+            .list:not(.dark)::-webkit-scrollbar-track {
+                background: 0 0;
+            }
+
+            .list:not(.dark)::-webkit-scrollbar-thumb {
+                border-color: var(--theme);
+            }
+        }
+
+    </style>
+</noscript><meta property="og:title" content="Gis" />
+<meta property="og:description" content="Fuyi Atlas - https://github.com/fuyi-atlas/fuyi-atlas.github.io" />
+<meta property="og:type" content="website" />
+<meta property="og:url" content="https://fuyi-atlas.github.io/categories/gis/" />
+
+<meta name="twitter:card" content="summary"/>
+<meta name="twitter:title" content="Gis"/>
+<meta name="twitter:description" content="Fuyi Atlas - https://github.com/fuyi-atlas/fuyi-atlas.github.io"/>
+
+</head>
+
+<body class="list" id="top">
+<script>
+    if (localStorage.getItem("pref-theme") === "dark") {
+        document.body.classList.add('dark');
+    } else if (localStorage.getItem("pref-theme") === "light") {
+        document.body.classList.remove('dark')
+    } else if (window.matchMedia('(prefers-color-scheme: dark)').matches) {
+        document.body.classList.add('dark');
+    }
+
+</script>
+
+<header class="header">
+    <nav class="nav">
+        <div class="logo">
+            <a href="https://fuyi-atlas.github.io/" accesskey="h" title="Fuyi Atlas (Alt + H)">Fuyi Atlas</a>
+            <div class="logo-switches">
+                <button id="theme-toggle" accesskey="t" title="(Alt + T)">
+                    <svg id="moon" xmlns="http://www.w3.org/2000/svg" width="24" height="18" viewBox="0 0 24 24"
+                        fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"
+                        stroke-linejoin="round">
+                        <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path>
+                    </svg>
+                    <svg id="sun" xmlns="http://www.w3.org/2000/svg" width="24" height="18" viewBox="0 0 24 24"
+                        fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"
+                        stroke-linejoin="round">
+                        <circle cx="12" cy="12" r="5"></circle>
+                        <line x1="12" y1="1" x2="12" y2="3"></line>
+                        <line x1="12" y1="21" x2="12" y2="23"></line>
+                        <line x1="4.22" y1="4.22" x2="5.64" y2="5.64"></line>
+                        <line x1="18.36" y1="18.36" x2="19.78" y2="19.78"></line>
+                        <line x1="1" y1="12" x2="3" y2="12"></line>
+                        <line x1="21" y1="12" x2="23" y2="12"></line>
+                        <line x1="4.22" y1="19.78" x2="5.64" y2="18.36"></line>
+                        <line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line>
+                    </svg>
+                </button>
+                <ul class="lang-switch"><li>|</li>
+                    <li>
+                        <a href="https://fuyi-atlas.github.io/zh/" title="Chinese"
+                            aria-label="Chinese">Zh</a>
+                    </li>
+                </ul>
+            </div>
+        </div>
+        <ul id="menu">
+            <li>
+                <a href="https://fuyi-atlas.github.io/archives/" title="Archive">
+                    <span>Archive</span>
+                </a>
+            </li>
+            <li>
+                <a href="https://fuyi-atlas.github.io/search/" title="Search (Alt &#43; /)" accesskey=/>
+                    <span>Search</span>
+                </a>
+            </li>
+            <li>
+                <a href="https://fuyi-atlas.github.io/categories/" title="Categories">
+                    <span>Categories</span>
+                </a>
+            </li>
+            <li>
+                <a href="https://fuyi-atlas.github.io/tags/" title="Tags">
+                    <span>Tags</span>
+                </a>
+            </li>
+        </ul>
+    </nav>
+</header>
+<main class="main"> 
+<header class="page-header"><div class="breadcrumbs"><a href="https://fuyi-atlas.github.io/">Home</a>&nbsp;»&nbsp;<a href="https://fuyi-atlas.github.io/categories/">Categories</a></div>
+  <h1>
+    Gis
+  </h1>
+</header>
+
+<article class="post-entry tag-entry"> 
+  <header class="entry-header">
+    <h2 class="entry-hint-parent">Geo Atlas Cache，一个精简的GWC组件
+    </h2>
+  </header>
+  <div class="entry-content">
+    <p>前言 瓦片缓存组件是绝大部分瓦片服务所应该有的模块之一，而Geo Atlas同样实现了其瓦片缓存模块。本文用于描述Geo Atlas中的Cache模块的设计与实现过程。
+什么是GAC？ GAC，全称是Geo Atlas Cache，是Geo Atlas类库中的Cache模块，用于提供矢量瓦片的缓存功能。GAC源自GWC（GeoWebCache），是在GWC的基础上进行了适应性的调整而来。目前支持基于内存、文件系统两种缓存方式，且此两种缓存方式可任意组合。对于瓦片缓存处理策略，目前支持Seed、Reseed、Truncate三种，与GWC保持一致。
+GAC的基本理念 GWC中声明并强调TileLayer的概念，并基于此抽象，用以适配数据来源与瓦片存储（缓存）。也就如同GeoServer中，一个图层如果需要拥有缓存能力，那么还需要创建一个TileLayer；也就是说，一个拥有缓存的图层，将会同时持有两个Layer，一个是 Map Layer（FeatureType），另一个是TileLayer。 TileLayer中进行瓦片存储相关内容的配置，可以随意配置存储容器对象（文件系统、对象存储、数据库等）。
+而目前Geo Atlas Cache的实现则将大大简化这一操作，没有TileLayer对象，全局共用同一个存储容器对象，无需繁琐的存储配置，通过自动装配快速启用缓存，我认为这是中小项目中所需要的。
+目前对于瓦片缓存（Tile Cache）的清理，也就是同GWC中提供的Seed、Reseed、Truncate一般。Truncate只需持有BlobStore的句柄即可完成，但Seed和Reseed则需前往数据的源端获取瓦片，进而才可完成操作，也就是需要持有获取源端瓦片Generate的句柄才可。或许这就是为什么GWC中提出TileLayer的原因之一也未可知 😮。 不过，我却由此认为GWC的边界不清晰，我认为缓存就做缓存的事情就可以了，应当把Layer、TileMatrixSet（GridSet）和Cache分开。但如此，若想要支持Seed和Reseed这两种给策略的话，至少需要提供一个拓展点才可。我在此将其命名为TileSource，是为Cache与Source（源端瓦片）之间的适配组件。其实，这不也是一种等同TileLayer的存在，但我并不通过Layer来进行关联控制，也没有TileLayer的概念，缓存就是缓存。
+GAC的设计与实现 因为GeoServer沉重的历史包袱以及大而全的臃肿，所以有了Geo Atlas项目。GAC也将延续此理念，去除Cache特定于Layer的概念，无需为图层单独配置缓存，因为绝大部分情况下，都是使用相同的缓存配置。同时，他应该是可以被快速集成，且易于配置的。为了提升缓存组件的易用性、兼容性及稳定性，至少应该提供两种不同的缓存存储对象，且其中一种应该是基于内存的，另外一种是支持持久化的。当数据量很少时，可以关闭缓存或仅开启内存缓存；当数据量较大时，可以仅开启持久化缓存或同时开启内存缓存。内存缓存与可持久化缓存可自由搭配，任意组合。当两者全开启时，可形成两级缓存，此时需注意两级缓存间数据的同步。
+GAC的需求与设计 接下来，再次确定一下GAC的需求：
+支持矢量瓦片缓存 提供两类缓存存储对象，其中一种应该是基于内存的，另外一种是支持持久化的，且两者可任意组合，同时开启可形成二级缓存结构 提供Seed、Reseed、Truncate此三种瓦片缓存清理策略 全局共用同一个缓存存储对象，提供快速集成能力 其中，二级缓存是此前没有接触过的内容。结合自我臆想，给出了如下设想 🫣：
+此二级缓存，可自行确定组合方式，并非需要两者同时开启。难点：状态同步（数据一致性）
+一级缓存（基于内存）： Local Mem Cache &#43; LRU Guava Caffeine 二级缓存（可持久化）：Outer Cache Redis File System Database GeoPackage 每一个Level一个gpkg文件，提升并发读写能力（支持配置为所有Level用一个gpkg，但是不推荐） PostGIS 不过，在经过一番调研之后，还是决定抄GeoWebCache的作业 😧。一是确实有一定的难度，二是目前时间有限，GAP中的我早已瑟瑟发抖 🙄。最重要的是，GeoWebCache中的MemoryBlobStore已经实现了上述二级缓存的需求呀 🫡，如此操作可直接覆盖掉前三个需求。而此时二级缓存的实现确定为：
+基于内存的缓存（Guava） 基于文件系统的缓存 需要特别注意的是，此MemoryBlobStore二级缓存是可拓展架构，后续可自行拓展不同的Provider。
+💡 对于Seed与Reseed的处理，则与GAC的理念中所述一致，通过TileSource对外提供拓展。也就是默认情况下，Cache模块只提供Seed与Reseed的声明，无法提供具体实现（无法直接与Source进行链接）。
+那么此刻只剩下最后一个需求了，其主旨围绕快速配置、易用。在此基于GeoWebCache中的DefaultStorageBroker 类进行缓存存储对象的代理，其符合GWC中缓存存储对象设计架构，也为后续提供了更多的拓展点，同时将其暴露给全局，即全局共用的缓存存储对象。对于快速集成能力，此处将结合Spring Boot的AutoConfiguration特性，为GAC提供自动装配能力。与此同时，将缓存存储对象的可设置属性通过配置的方式暴露出来，可直接在application.yml或application.properties中进行配置。具体可配置内容如下所示：
+geo-atlas.cache.enabled=false（是否启用缓存，默认为false） geo-atlas.cache.inner-caching-enabled=false（是否启用内存缓存，默认为false）
+geo-atlas.cache.inner.storage.provider=guava（可选值：guava，暂不支持，保留）
+geo-atlas.cache.inner.storage.memory-limit=16（内存大小限制，单位MB，默认16）
+geo-atlas.cache.inner.storage.concurrency-level=4（缓存并发级别的默认值，默认为4）
+geo-atlas.cache.inner.storage.eviction-policy=null（缓存驱逐政策，即缓存淘汰算法，可选值：NULL、LRU、LFU、EXPIRE_AFTER_WRITE、EXPIRE_AFTER_ACCESS，默认值为NULL）
+💡 LRU、LFU暂时不支持...</p>
+  </div>
+  <footer class="entry-footer"><span title='2024-07-13 15:23:18 +0800 CST'>July 13, 2024</span>&nbsp;·&nbsp;7 min&nbsp;·&nbsp;Fuyi</footer>
+  <a class="entry-link" aria-label="post link to Geo Atlas Cache，一个精简的GWC组件" href="https://fuyi-atlas.github.io/posts/gis/what-is-gac/"></a>
+</article>
+
+<article class="post-entry tag-entry"> 
+  <header class="entry-header">
+    <h2 class="entry-hint-parent">再谈TileMatrixSet，二维瓦片金字塔结构的标准定义（下）
+    </h2>
+  </header>
+  <div class="entry-content">
+    <p>前言 书接上回，本章节为下篇：TileMatrixSet实现及相关计算原理探讨。
+本章节将以TileMatrixSet模型的典型实现，即GeoWebCache中的Gridset作为开端，对OGC中TileMatrxSet模型进行印证。而后对TileMatrixSet相关计算原理进行探讨，并以CGCS2000切片方案为例进行验证。另附带说明TileMatrixSet在Geo Atlas中的实现及应用 🤨。
+Gridset &amp; TileMatrixSet 这里就不再对GeoWebCache做介绍了，直接切入主题。GeoWebCache中的Gridset正是对应着TileMatrixSet模型，我们先来看一下GeoWebCache对于Gridset的相关介绍：
+Gridsets and Gridsubsets Gridsets 和 Gridsubsets 是指 GeoWebCache 所服务的图层的空间参考系统（the spatial reference system）。从本质上来说，正如 Tiles 中所介绍的，GeoWebCache 与参考系统无关。当 GeoWebCache 向 WMS 发出请求时，它使用 Gridsets 和 Gridsubsets 信息将其内部切片索引转换为 WMS 可以理解的空间请求。
+💡 说实话，有时候我觉得老外的啰嗦话挺多的，其实这里就是表达GeoWebCache就是使用 Gridsets 和 Gridsubsets 将瓦片坐标转换为瓦片对应的空间范围的。从其实现来看，此处所述的内部切片索引正是对应着瓦片坐标系。
+下面分别对 Gridset 和 Gridsubset 的构成进行描述，此处引用原文：
+A gridset is a global definition (i.e. not layer-specific) specifying:
+全局定义即对应着通用的切片方案，所以不是特定于层（图层）的。
+A spatial reference system (EPSG code)
+对应着投影坐标系。
+A bounding box describing the extent, typically the maximum extent for the above reference system...</p>
+  </div>
+  <footer class="entry-footer"><span title='2024-07-11 17:18:03 +0800 CST'>July 11, 2024</span>&nbsp;·&nbsp;7 min&nbsp;·&nbsp;Fuyi</footer>
+  <a class="entry-link" aria-label="post link to 再谈TileMatrixSet，二维瓦片金字塔结构的标准定义（下）" href="https://fuyi-atlas.github.io/posts/gis/what-is-tilematrixset-calculation-principle/"></a>
+</article>
+
+<article class="post-entry tag-entry"> 
+  <header class="entry-header">
+    <h2 class="entry-hint-parent">再谈TileMatrixSet，二维瓦片金字塔结构的标准定义（上）
+    </h2>
+  </header>
+  <div class="entry-content">
+    <p>前言 其实，在此前矢量金字塔技术研究一文中已经大致提及了瓦片金字塔与TileMatrixSet的关系，为什么还要在这里再次说明呢？主要是前文更侧重于矢量金字塔的概念定义，对于TileMatrixSet的描述过少，所以才会再次对TileMatrixSet进行说明。本文将基于 OGC Two Dimensional Tile Matrix Set 标准对TileMatrixSet进行研究探讨，将侧重于说明其基本构成要素的定义以及整体的技术实现。而GeoWebCache中的GridSet作为典型实现，本文将会对其进行再次说明，以印证OGC 关于TileMatrixSet的定义。由于内容较多，本文将分为下上两个篇章进行描述。上篇是对TileMatrixSet以及其构成要素的基本概念进行描述，而下篇则是对GeoWebCache中的GridSet实现进行研究，同时结合我国CGCS2000切片方案对TileMatrixSet格网划分计算原理进行探讨，另附带说明Geo Atlas中关于此模块的实现细节。
+本章节为上篇：TileMatrixSet及其构成要素的基本概念。
+什么是TileMatrixSet？ TileMatrixSet，即Tile Matrix Set，源自 OGC Two Dimensional Tile Matrix Set(目前已更新到v2)。该标准定义了瓦片矩阵集的规则和要求，作为一种基于一组规则网格对空间进行索引的方式，这些规则网格为坐标参考系统中有限比例列表定义了一个域（瓦片矩阵）。
+💡 The OGC Two Dimensional Tile Matrix Set and Tile Set Metadata Standard defines the rules and requirements for a tile matrix set as a way to index space based on a set of regular grids defining a domain (tile matrix) for a limited list of scales in a Coordinate Reference System....</p>
+  </div>
+  <footer class="entry-footer"><span title='2024-07-03 16:36:55 +0800 CST'>July 3, 2024</span>&nbsp;·&nbsp;8 min&nbsp;·&nbsp;Fuyi</footer>
+  <a class="entry-link" aria-label="post link to 再谈TileMatrixSet，二维瓦片金字塔结构的标准定义（上）" href="https://fuyi-atlas.github.io/posts/gis/what-is-tilematrixset/"></a>
+</article>
+
+<article class="post-entry tag-entry"> 
+  <header class="entry-header">
+    <h2 class="entry-hint-parent">矢量金字塔技术研究
+    </h2>
+  </header>
+  <div class="entry-content">
+    <p>前言 在图像切片时代，多层次模型依靠的是影响金字塔。得益于影像栅格数据分辨率的特点，基于影像金字塔可以较好的实现多分辨率模型。但是在矢量切片时代中，就无法直接从影像金字塔技术获利了，因为矢量数据不具有分辨率这个特性，而是采用矢量金字塔技术来实现多层次、多尺度模型。
+影像金字塔（分层） 影像金字塔技术通过影像重采样方法，建立一系列不同分辨率的影像图层，每个图层分割存储，并建立相应的空间索引机制，从而提高缩放浏览影像时的显示速度。如下图所示的影像金字塔，底部是影像的原始最高分辨率的表示，为512×512图像分辨率，越往上的影像的分辨率越小，分别为256×256，128×128，顶部是影像金字塔的最低分辨率的图像64×64，因此这个影像金字塔共有4层，即4个等级的分辨率。显然影像的图像分辨率越高，影像金字塔的等级越多。
+从给出的定义与图示来看，好像与我们目前使用的瓦片地图有一定的差别。是的，这是因为影像金字塔负责的内容仅仅是构建多分辨率层次，也就是每一层都是对应完整数据范围的一块数据，也就是我们常说的分层（栅格数据是均衡的，可以通过分辨率来作为尺度描述，所以多分辨率层级也就对应着多尺度层级）。
+瓦片金字塔（分块） 节选自《高性能影像数据瓦片化关键技术研究-刘世永-2016》
+要实现现如今使用的瓦片地图模型，还需要瓦片金字塔配合完成。
+瓦片金字塔模型是当前应用最广的多层次地图数据组织模型，通过瓦片金字塔模型，前端在进行放大和缩小操作时，可以有效地减少数据读取的空间查询时间。通过只加载可视区域范围内的瓦片，可以减少数据加载量，降低网络传输压力，提高前端的数据可视化速度。
+也就是说，瓦片金字塔实在影像金字塔的基础上，基于特定规格大小对每层影像进行切割。此操作也就是对应着我们常说的分块。
+数据原始分辨率并不是标准化的，分层结果即不够标准化，也不够细致。所以在此基础上再次分片，既是减少了数据量使得传输与加载效率提升，同时也是给出了标准，兼容性更好。
+瓦片金字塔的主要原理为：基于某个特定的地图投影坐标系（常规是Web墨卡托），将曲面的地球投影到二维平面，而后将该二维平面进行多尺度地划分，即相当于制作了多个不同分辨率层级的数字地图。各层级对应相应编码，层级越高地图所对应的分辨率越高；而后对每一层级的全球空间范围地图按照某种空间划分方法进行格网划分，划分成若干行和列的固定尺寸的正方形栅格图片，这些切分出来的规整的单个格网单元称为瓦片，各层级的划分方法都是相同的。
+瓦片划分方法需满足以下条件：
+每个层级下的所有瓦片可以无缝拼合成一张全球空间范围的世界地图 每个瓦片都有唯一编码，根据编码可以解算该瓦片对应的空间范围 在某一层级下给定一坐标点可以根据其空间坐标解算其所在瓦片的编号 每一层级瓦片对应一层金字塔分层，所有层级的瓦片便构成了整个瓦片金字塔模型。每一层中的瓦片划分方法一般采用均匀四分的划分方法，即以赤道和中央经线的交点为初始中心，不断地对地图进行四分，直到每个格网的大小为tilesize * tilesize为止，其中tilesize表示单个瓦片的边长。基于此种划分方法，第0层金字塔（金字塔顶层）用一个瓦片就能表示整张世界地图，第1层要用4^z个瓦片来表示整个世界地图，z为当前瓦片的金字塔层级。
+瓦片投影坐标系 瓦片金字塔模型中的投影坐标系可以有多种，目前最广泛采用的是Web Mercator投影，它是Mercator投影的一种变体。
+瓦片坐标系 所有瓦片的编码都是基于瓦片坐标系下进行的，瓦片坐标系的原点一般都在左上角或者左下角，TMS规范中是在左下角（GeoWebCache遵循该规范），但是现有的Google、Mapnik切片系统都是选用左上角作为原点，本文主要以原点在左上角的瓦片坐标系进行说明。 瓦片的编码方式如下图所示，层级用z表示，瓦片经线方向（指瓦片经度发生变化的方法，即东西向，东向为正）上编号为x，纬线方向（指瓦片维度发生变化的方向，即南北向，南向为正）上编号为y，因此每一个瓦片都可以通过一个三维元组（x,y,z）来唯一描述。
+总的来说，如今我们所说的影像（栅格）金字塔大多指代的是影像金字塔与瓦片金字塔的结合体或是瓦片金字塔（默认含有分层），而不是单独指代分层或者单独指代分块。
+矢量金字塔 影像金字塔是为栅格数据服务的，也是图像切片时代的核心产物。但是到了矢量切片时代后，由于矢量数据并不具备分辨率的特性，且矢量数据不同于栅格数据，它有着疏密不一致、分布不均与的特点，所以无法直接利用影像金字塔技术。不过瓦片金字塔是基于分层金字塔的基础上构建的，所以对数据类型并没有要求，在矢量切片中是可以直接复用的。总而言之，在矢量切片时代中，需要一个符合矢量数据特点的分层模型，作为矢量数据源与瓦片金字塔之间沟通的桥梁。同时考虑到应用上的兼容性，所以最终基于金字塔理论之上进行分层模型的定义，谓之：矢量金字塔。
+对于矢量数据的分层，将使用比例尺作为尺度描述，建立一系列不同比例尺的分层。不同于栅格金字塔的多分辨率层级，矢量数据金字塔没有分辨率的概念，但是不同层级之间的数据详尽程度也是不同的。随着比例尺的由小到大，矢量要素也变得越来越详细；而随着比例尺由大到小，矢量要素也将变得精简与概化，以符合人们的使用要求。
+总而言之，矢量金字塔的的目的就是解决在小比例尺下大数据量（或高密度区域）矢量数据聚集度高、要素重叠和显示速度慢的问题。（其实就是矢量数据的制图综合问题，矢量金字塔不过是其中的一个解而已）
+注：我们此处所谈矢量金字塔，只是矢量数据分层金字塔，只是分层。
+矢量分层 为了达成人们的使用要求，则需要对数据进行处理，以符合给定比例尺级别下保持相应的详尽程度。
+与栅格数据不同，矢量数据通常都具有空间特征与属性信息。空间特征体现在数据的空间坐标系、空间分布以及几何特征；属性信息则是数据实体相关的一些信息。那么矢量数据的空间特征与属性信息则可作为分层的依据，首要对数据的属性信息进行处理，而后再基于空间特征进行处理。
+属性分类分级 对于数据的属性特征处理主要是对属性信息进行分类和分级两种情况。分类是根据属性信息划分类别；分级即根据属性信息按照其重要程度划分不同的级别，并且赋予不同的权重值。
+空间特征处理 基于空间特征的处理则就多种多样了，比如可以基于数据的分布（密度）抽稀、基于周长或面积进行选取、基于几何形状进行简化。在处理的同时，还需要是实际情况考虑是否维持数据的拓扑关系。
+总而言之，可将上述的分层处理方法抽象为两种：
+选取（Filter）：属性分类分级，基于密度、周长、面积的处理都属于选取 简化（Simplify）：基于空间几何形状的处理属于简化 当然，上述两种只是最基础的分层处理方法，后续还可以有更多处理方法，比如合并、融合、夸大等。但我想来，如果能够比较合理的完成上述两个操作，应该也是达到了基本可用层次。
+不同行业的数据具有着不同的重点或侧重点，分层不仅需要结合矢量数据模型的特点，还需要结合行业背景与应用场景综合考虑。
+此处再借用公谨（遥想公瑾当年）的一句描述进行佐证：
+所谓的矢量金字塔模型，即基于制图综合的知识，分别设置海量数据在不同zoom下是否显示，是否简化，是否融合的一种策略，当动态提取切片时，根据这个策略选择数据，实际捞取的数据就非常少，有效解决了矢量切片不能解决数据太密集集中的问题。
+矢量金字塔 → 矢量数据的多尺度表达 → 矢量数据的自动制图综合（保证综合前后要素内部及要素之间的拓扑关系是矢量地图正确显示的基本需求 😯）
+注：此处所述分层，并不是比例尺等级。而是在不同比例尺层级下，矢量数据的详尽程度。而分层处理，即为通过一定的手段来控制数据的详尽程度。
+技术实现 在技术实现上，目前我看到的都是以瓦片金字塔结构为基础，叠加分层处理手段的方式实现的。因为瓦片金字塔是在分层金字塔的基础之上，而分层可分为两个部分：
+尺度分级定义 → 一系列的比例尺等级 分层分级处理（综合算子） → 一系列的处理算子（如：Filter、Simplify） OGC TileMatrixSet 定义 而尺度分级定义不论是在分层金字塔还是瓦片金字塔中都是一致的，也就是将分层分级处理（综合算子）剥离出来单独实现，在最终的瓦片生产流程中，接入瓦片金字塔即可。
+GeoWebCache 实现 瓦片金字塔结构 public class GridSet { private String name; // 投影坐标系 private SRS srs; // 瓦片宽, such as 256 private int tileWidth; // 瓦片高, such as 256 private int tileHeight; /** * Whether the y-coordinate of {@link #tileOrigin()} is at the top (true) or at the bottom * (false) */ protected boolean yBaseToggle = false; /** * By default the coordinates are {x,y}, this flag reverses the output for WMTS getcapabilities */ private boolean yCoordinateFirst = false; private boolean scaleWarning = false; // 将坐标参考系统 (CRS) 单位转换为米的系数 // 也就是说，这个参数表示的是给定的CRS中一个单元转换为米的系数。换句话说，也就是在指定的CRS中，一个单元表示多少米。 // 目前常用的就两种投影，一是以米为单位的（即metersPerUnit为1）；其次是以度为单位的经纬度投影（metersPerUnit表示为1度代表多少米，即：360/赤道周长，不同CRS使用不同的椭球体，所以其赤道周长也会存在一定差异。） private double metersPerUnit; // 像素大小, 通常给定0....</p>
+  </div>
+  <footer class="entry-footer"><span title='2024-05-03 22:14:49 +0800 CST'>May 3, 2024</span>&nbsp;·&nbsp;2 min&nbsp;·&nbsp;Fuyi</footer>
+  <a class="entry-link" aria-label="post link to 矢量金字塔技术研究" href="https://fuyi-atlas.github.io/posts/gis/vector-pyramid-technology/"></a>
+</article>
+
+<article class="post-entry tag-entry"> 
+  <header class="entry-header">
+    <h2 class="entry-hint-parent">关于矢量瓦片技术支持前端渲染带来的思考
+    </h2>
+  </header>
+  <div class="entry-content">
+    <p>前言 书接上回，此前提到地图瓦片切片技术的发展。矢量切片技术将瓦片的渲染由服务端迁移到客户端，此操作带来的影响力不可谓不大，基于此，完全可以随心所欲的定义地图的表达。那么在实际的应用当中，当渲染从服务端迁移后客户端后，是否会带来一些其他的问题？
+超20M的瓦片数据 此事发生在2023年，当时我们的技术组合是：空间数据库&#43;GeoServer（vector tile plugin）&#43; Mapbox GL JS，基于此提供矢量瓦片服务。某一天，在某位心细如发的大佬的察觉下，突然发现提供的地图服务在层级为10级时，出现一个大小大于20M的瓦片，顿感惊人。经过多次核对后，确定在该份数据下，GeoServer在小比例尺下（约莫10级往下）生产的大部分瓦片尺寸都比较大，而数据密度越大的地方尤其严重。最终，我们认为：是由于GeoServer没有提供矢量分层抽稀简化的能力，所以导致在小比例尺&#43;高密度的双重叠加下，瓦片大小暴增。
+在一段时间后，为了快速处理该问题，我曾提出：可以基于目前配图的思想（解析配图文件），在服务端去往数据库读取数据的时候便进行数据过滤（其实就是分层分级），避免大量不需要的数据经查询、传输、编码再传输带来的影响。比如我们按照口径进行约定，在13级往下，只显示大于xx口径的数据的数据，那么此时所有小于该口径的数据都不需要被传递。
+但我们前端配图人员提出一个说法：说如果你这般处理，那么意味着配图的时候数据就不是完整的，我无法自行选择数据，不同的项目需求也不尽相同，灵活性自然大打折扣。同时，也就意味着该项配置与瓦片缓存是绑定的，一旦存在配图项的变更，便意味着此前缓存均是失效的。
+配图的边界 时至今日，已过半年。目前想来，这里确定存在这么几个问题：
+到底什么是配图，配图配的又是什么？ 数据发布过程中，配图应该处于什么阶段？ 对于什么是配图，我目前还给不出一个十分恰当的回答，因为此前确实没有做过这方面的内容。但私以为狭义情况下，地图的符号化过程应该称之为配图。配图内容如下：
+要素符号化 文字标注 那么分层显示控制能力（属性分级）是否应该归属到配图中呢？在图像切片时代中，想来配图都是提前确定好的，而且受益于影像金字塔自带多层次分辨率的能力，所以在配图中压根不需要考虑分级问题（假定数据都是栅格数据）。但是矢量数据并没有分辨率的说法，所以无法从影像金字塔模型获利。在面对大数据量或高密度区域的情况时，需自行处理分级问题。
+对于矢量数据来说，在矢量瓦片技术出现之前，所有瓦片都是在服务端渲染，那么属性分级控制也是在服务端进行的。而在矢量瓦片技术出现之后，完全可以直接在客户端实现属性分层控制了。且目前开源GIS技术方案大多都选择：GeoServer&#43;Mapbox，但在实际使用中感觉GeoServer并不理会什么属性分级和空间特征简化，而是一股脑的将数据丢给客户端，客户端自己筛选。
+从结果来看，好像在应用上确实是行得通的。实际上确实如此，或许大多数公司都是这样做的吧。但是我认为这是有问题的，这就好像是得益于矢量瓦片渲染能力后移的特点，服务端将原本应该自己管控的数据一股脑的丢到了客户端，由客户端自行控制。
+那么问题来了，数据的分层分级控制权到底应该给谁，是瓦片生产端还是客户端呢？
+我认为应该优先厘清整个生产流程，明确各节点能力边界
+数据的分类、分层肯定是在最前面，且分类、分层与金字塔分层息息相关。且应该形成公知，瓦片的生产端与应用的客户端都应该清晰的知道【数据分层分级控制策略 → 矢量金字塔分层规则定义】 其次是矢量数据的发布，此中应该完整的实现矢量数据分层，即形成矢量金字塔结构【矢量金字塔模型实现】 因矢量瓦片技术带来的配图后置，数据的符号化在此处完成【地图符号化】 其次，可以想一下数据分层控制权限归属到客户端后会带来什么样的影响：
+在大数据量或高密度区域的情况下，小比例尺级别瓦片尺寸可能爆炸 计算资源、存储资源（缓存）占用增多 对带宽要求高，移动端的话流量嗖嗖的跑 客户端性能下降 所以我认为，数据控制能力应该归属于瓦片生产端，客户端可以支持分层控制能力，但其对于数据的控制只能在全局统一的分类、分层策略所提供的范围内活动。也就是说客户端可以实现的分层范围是全局规定的范围的子集。
+对于目前在配图中进行全局数据的分层分级行为，我认为是矢量瓦片技术带来的配图动作后置产生的影响。同时在GeoServer &#43; Mapbox 客户端控制数据操作的长期影响下，给后来人一种错觉便是数据控制也变更到客户端控制。
+论GeoServer的正确使用？ 最近在自己实现一个矢量瓦片服务，由于自己目前只会写Java，所以不得不对GeoServer进行借鉴，所以就进一步的研究了GeoServer的源码。
+GeoServer可以看作是GeoTools，GeoWebCache以及OGC API Implement的结合体。其中，GeoWebCache提供了金字塔结构的定义和缓存能力；GeoTools提供了空间数据相关的定义和操作。在本次研究后，我确定我需要向GeoServer道歉。在此前的描述中，我认为GeoServer是没有提供数据分层和空间简化的能力的，但是我错了。
+我拉取的是GeoServer的2.22.x分支，因为这个版本用的比较多，相对而言更具有代表性，所以没有选择最新版本。
+空间简化能力 也就是说，在GeoServer vector tile的生产过程中，已经集成了Simplify功能。
+还有一个情况，其实GeoServer Vector Tile Plugin采用的矢量瓦片编码器（java-vector-tile）中其实也提供了Simplify的功能，只不过默认是关闭的。
+数据分层（属性分级） GeoServer的vector tile实现中，居然是尝试从Style（SLD）中获取到Filter的信息，用以减少数据的检索（数据库中的Filter比Java基于内存的Filter更高效），同时还提供了一个将Mapbox style转换为SLD的拓展模块。
+看到这里的我很激动，感觉找到了知己一般，哈哈哈。
+在明白真相之后的我，只能是感叹GeoServer的历史包袱太重了，但应该被敬佩。
+而此时再次回头看我之前提出解析配图文件的想法，发现这种做法也是有问题的。
+矢量瓦片技术出现，实现了一套瓦片数据可以有N种配图方案 矢量瓦片技术完美的分离了数据与渲染，边界清晰 所以，基于配图剥离属性分级的方式不就又将渲染与数据耦合起来，配图也就会和缓存绑定了，也就是一种配图方案一套瓦片数据了（若一旦涉及到分级部分的变化），自然是有问题的。
+结论 综上所述，私以为：
+在矢量切片技术下，数据当有数据本身的分层规则，不应该依赖于配图，也不应该由配图来定义。
+分层控制当属于数据控制权限，应该归属于瓦片的生产端控制 在矢量瓦片时代，配图就是地图符号化的过程，对应矢量切片技术下，渲染后移到客户端的部分 全局分层分级策略应该是首先定义的，且应该形成公知的形态。服务端的数据控制应当严格遵循该策略，客户端可控分层范围是该策略的子集 参考 GeoServer Branch 2....</p>
+  </div>
+  <footer class="entry-footer"><span title='2024-05-03 13:58:16 +0800 CST'>May 3, 2024</span>&nbsp;·&nbsp;1 min&nbsp;·&nbsp;Fuyi</footer>
+  <a class="entry-link" aria-label="post link to 关于矢量瓦片技术支持前端渲染带来的思考" href="https://fuyi-atlas.github.io/posts/gis/thoughts-on-mvt-front-end-rendering/"></a>
+</article>
+
+<article class="post-entry tag-entry"> 
+  <header class="entry-header">
+    <h2 class="entry-hint-parent">切片技术发展
+    </h2>
+  </header>
+  <div class="entry-content">
+    <p>前言 本文80%内容节选自：《WebGIS数据不切片或是时代必然》，后在其基础上添加了部分内容。
+数据切片是解决大规模大体积地理数据在Web前端轻量化传输和显示的关键技术，是每一个开发者几乎每天都在使用的技术，有时候将服务端底图切成xyz图片，有时候将大影像数据切成xyz图片，也有时候将矢量数据切成xyz的矢量切片。
+数据切片起源–图像切片时代（WMS → WMTS，服务端渲染&#43;预处理） Web上古时代，人们浏览在线地图，一般是服务器端将页面地图要显示的地理范围内的地理数据都查询出来，然后在服务端按照专题地图的配置样式，渲染成地图图片，再返回客户端浏览，这个时代诞生的OGC标准就是WMS（Web Map Service）服务，该服务一直沿用至今。
+类似WMS这种服务存在很多致命的缺点：由于地理范围的不可控，获取范围内的数据不可控，数据有时候会很大，数据通常在数据库中，IO和网络传输就耗时很严重；服务端获取数据后会进行数据渲染成地图图片，占用大量CPU资源；克服一系列的困难终于成图传输给前端浏览。可以想象，这个过程如此艰难，用户可能等的花儿都开了。
+为了解决这个痛点，谷歌地图开创性提出了基于Web墨卡托投影，预先在服务端全量渲染，然后按照地图不同的显示级别（金字塔原理），切成了xyz的图片。
+该技术成为Web2.0时代使用最广泛的技术，成为WebGIS标准，诞生了一系列如基于工业标准的TMS服务，基于OGC规范的WMTS服务。很快，百度地图，高德地图、天地图都使用该技术原理建设了自己的切片地图服务。广大GIS从业者也开始了“项目一启动，先把底图切”的套路。
+基于该技术原理，对大的影像数据如几十G的GeoTiff数据也进行了切片，形成影像底图给客户端使用。
+这个时期的开源GIS主要技术是基于GeoServer的WMS、WFS、TMS、WMTS服务。
+核心技术：Web墨卡托投影、栅格金字塔
+数据切片发展–矢量切片时代（WMTS，客户端渲染&#43;预处理） 虽然基于XYZ的图片切片技术很成功，但是也存在不少问题：
+全图预切耗时长：通常切图zoom级别从0到20，通过金字塔原理图可知，上一级别的一张图片，下一级别会裂变成4张，级别越大，图片越多，同时地理范围越大，图片也越多，图片多了，切图耗时就很长，资源无论是基础底图切片还是影像底图切片都要耗时漫长。 资源要求高：需要庞大的服务端渲染和切图的计算资源，满足分布式渲染、切图、存储需求。 存储冗余：原始矢量和栅格数据，同时冗余存储了数据切片，存储压力大，数据切片转储IO压力大。ArcGIS为了提升转储性能，开创了离散性切片和紧凑型切片两个格式，紧凑型切片在转储时性能较高。 数据更新不及时：由于切图耗时长，通常很少会定期更新地图切片数据，导致数据显示落后于实际生活现状，不能很好的服务用户。 地图千篇一律：这个时期项目最常采用的是天地图地图服务，不管啥项目，不管什么地区，似乎地图都长一个样子。甲方可能审美疲惫了，他们希望底图能是定制化的，能不能暗黑一点？科幻一点？ 既然存在问题，自然有人想解决问题，从15年左右，Mapbox受够了传统地图显示风格了，它提出了MVT矢量切片技术，该技术一经推出就大受欢迎，开启了WebGIS底图定制化时代。
+很显然，矢量切片和图像切片最大的区别就是：渲染从服务端迁移到客户端了，换句话说，服务端减负了，带来的好处也是不言而喻：
+资源要求降低：服务器资源要求可见性降低，渲染很耗资源的。 数据更新比较及时：如果数据更新，简单更新下局部变更地区的数据的矢量切片即可，由于不用全图渲染，耗时极大减少，数据的有效性极大提高。 存储冗余降低：采用MbTiles的设计规范，将数据和序号索引剥离，复用重复区域数据，极大降低切片数据量。但是数据冗余还是存在的。 地图不再千篇一律：渲染是客户端的，那么甲方各种优秀的创意都能得到释放了，配置大屏的感觉已经是很容易的事情了。各行各业的地图五彩斑斓各有千秋，地图设计者们的春天来了。高德、百度跟的很快，目前也都提供矢量切片底图定制化服务了 这个时期的开源GIS主要技术是基于GeoServer的矢量切片服务，基于Mapbox的底图切图工具tippecanoe等。这个时期，3D GIS蓬勃发展，诞生了3DTiles、I3S等3D切片ogc规范，并大量在工程中使用。
+矢量切片解决了不少问题，但仍遗留问题是：全图预切耗时长，切片数据冗余占用存储空间。这个问题同样也是栅格切片、3D切片共同的问题。于是有人问，能不能数据不切片？也就不存在预切耗时长，切片数据冗余的问题了？答案是肯定的。
+核心技术：矢量金字塔，MVT
+正所谓尾大不掉，虽然已经出现了矢量切片技术，但是整体的工艺流程还是在预切路线。这可能和矢量切片解决的问题相关，因为矢量切片解决的是渲染的问题，可以更自由的进行渲染了，而且只需要提供一份切片数据即可。
+数据切片方向–动态切片时代（WMTS，客户端渲染） 那么上一个阶段遗留的问题还有什么：预处理，也就是不管怎么样，我先切数据
+笔者（原文作者：遥想公瑾当年）曾经大量使用PostGIS&#43;并行计算&#43;动态矢量切片技术实现动态业务数据的快速前端矢量呈现，PostGIS是目前开源架构里唯一能支持动态矢量切片的数据技术。
+动态切片技术不再预先切图，也不会有大量切片的文件存储，将切片技术诞生以来所遗留的问题都一次清空。由于通常数据量很大，动态矢量切片技术基本上数据不出库，而由数据库汇总组织数据并直接生成切片结果出去，后台几乎啥也不做，时空数据库的地位越来越重要。
+这是一个崭新的时代，预示着数据不切片时代的来临，毕竟矢量和栅格不切片技术理论上还是比较成熟的，未来3DTiles这些3D切片理论也会逐渐成熟的。
+核心技术：动态矢量切片&#43;矢量金字塔&#43;MVT
+在这里我想要补充一下上面的示意图，这里不是说动态矢量切片技术只能应用在数据库中，前文中也提到当前开源架构中PostGIS是唯一能支持动态矢量切片的数据技术。这里是基于传统矢量切片技术与PostGIS的动态矢量切片技术的对比，更多的是想表达流程的变化（预切 → 动态，以及切片产生的位置），以及流程变化带来的性能提升和相关影响；还有就是原文作者认为的后续的发展方向，Based on spatial database。
+关于动态矢量切片技术 动态矢量切片技术可以说是传统矢量切片的动态应用（更广义的可以认为：是可以按需动态生成的，具备多层次模型，且每个层次包含适当选取及简化的数据的切片技术）。强调不再预切，而是按需生成，且应该同时满足可以快速显示的要求。
+按需动态生成（与数据源是链接着的或是可链接的，即可达成随时可访问），不做预切 多层次结构（如：矢量金字塔） 数据选取与简化 MVT支持 从发展进程上面看，技术的升级是为了解决此前存在的痛点问题。动态矢量切片技术是为了解决预切耗时，且会产生大量的瓦片存储（预切），数据越大，产生的瓦片越多。
+从实际的应用上看，此前的矢量切片技术我更愿意将之称为传统矢量切片技术，用以与矢量切片做一定的区分。传统矢量切片技术还是走的预处理的路子，产生的是静态矢量瓦片数据，即在流程上是无法做到快速更新的。与之对应的便是动态实时生产的路线，可称为动态矢量瓦片技术。私以为，两者更大的区别在于矢量瓦片生产的思路，也就是是否需要预切。
+所以，动态矢量切片技术可以有各种各样的实现，而PostGIS中的动态矢量瓦片技术便是其中的一种。且到目前，GeoServer同样实现了动态矢量瓦片技术（只不过其历史包袱过重 🫡）。
+值得注意的是，基于数据库的动态矢量切片有一个很大的特点：缩短了切片的传导路径（也就是所谓的数据不出库，出库即为切片）。
+参考 WebGIS数据不切片或是时代必然 PostGIS动态矢量切片（原理&#43;实现） </p>
+  </div>
+  <footer class="entry-footer"><span title='2024-05-03 10:20:47 +0800 CST'>May 3, 2024</span>&nbsp;·&nbsp;1 min&nbsp;·&nbsp;Fuyi</footer>
+  <a class="entry-link" aria-label="post link to 切片技术发展" href="https://fuyi-atlas.github.io/posts/gis/tiling-technology-development/"></a>
+</article>
+    </main>
+    
+<footer class="footer">
+    <span>&copy; 2024 <a href="https://fuyi-atlas.github.io/">Fuyi Atlas</a></span>
+    <span>
+        Powered by
+        <a href="https://gohugo.io/" rel="noopener noreferrer" target="_blank">Hugo</a> &
+        <a href="https://github.com/adityatelange/hugo-PaperMod/" rel="noopener" target="_blank">PaperMod</a>
+    </span>
+</footer>
+<a href="#top" aria-label="go to top" title="Go to Top (Alt + G)" class="top-link" id="top-link" accesskey="g">
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 12 6" fill="currentColor">
+        <path d="M12 6H0l6-6z" />
+    </svg>
+</a>
+
+<script>
+    let menu = document.getElementById('menu')
+    if (menu) {
+        menu.scrollLeft = localStorage.getItem("menu-scroll-position");
+        menu.onscroll = function () {
+            localStorage.setItem("menu-scroll-position", menu.scrollLeft);
+        }
+    }
+
+    document.querySelectorAll('a[href^="#"]').forEach(anchor => {
+        anchor.addEventListener("click", function (e) {
+            e.preventDefault();
+            var id = this.getAttribute("href").substr(1);
+            if (!window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+                document.querySelector(`[id='${decodeURIComponent(id)}']`).scrollIntoView({
+                    behavior: "smooth"
+                });
+            } else {
+                document.querySelector(`[id='${decodeURIComponent(id)}']`).scrollIntoView();
+            }
+            if (id === "top") {
+                history.replaceState(null, null, " ");
+            } else {
+                history.pushState(null, null, `#${id}`);
+            }
+        });
+    });
+
+</script>
+<script>
+    var mybutton = document.getElementById("top-link");
+    window.onscroll = function () {
+        if (document.body.scrollTop > 800 || document.documentElement.scrollTop > 800) {
+            mybutton.style.visibility = "visible";
+            mybutton.style.opacity = "1";
+        } else {
+            mybutton.style.visibility = "hidden";
+            mybutton.style.opacity = "0";
+        }
+    };
+
+</script>
+<script>
+    document.getElementById("theme-toggle").addEventListener("click", () => {
+        if (document.body.className.includes("dark")) {
+            document.body.classList.remove('dark');
+            localStorage.setItem("pref-theme", 'light');
+        } else {
+            document.body.classList.add('dark');
+            localStorage.setItem("pref-theme", 'dark');
+        }
+    })
+
+</script>
+</body>
+
+</html>

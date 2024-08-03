@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="utf-8" standalone="yes"?>
+<rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom" xmlns:content="http://purl.org/rss/1.0/modules/content/">
+  <channel>
+    <title>Network Program on Fuyi Atlas</title>
+    <link>https://fuyi-atlas.github.io/categories/network-program/</link>
+    <description>Recent content in Network Program on Fuyi Atlas</description>
+    <generator>Hugo -- gohugo.io</generator>
+    <language>en</language>
+    <lastBuildDate>Mon, 03 Aug 2020 22:17:53 +0800</lastBuildDate>
+    <atom:link href="https://fuyi-atlas.github.io/categories/network-program/index.xml" rel="self" type="application/rss+xml" />
+    <item>
+      <title>Socket简单案例实现</title>
+      <link>https://fuyi-atlas.github.io/posts/program/network-program/simple-case-001/</link>
+      <pubDate>Mon, 03 Aug 2020 22:17:53 +0800</pubDate>
+      <guid>https://fuyi-atlas.github.io/posts/program/network-program/simple-case-001/</guid>
+      <description>前言 终于还是吃了自己的狗粮&amp;hellip;&amp;hellip;
+关于 客户端-服务端 网络模型 常规情况下，网络应用都会存在客户端和服务器端，比如平时外卖应用一样，我们在外卖应用上的操作，都对应着客户端应用向服务器发起请求，并收到响应的过程。服务器为客户端提供业务数据支持，客户端则为用户提供交互界面。
+在网络编程中，具体到客户端 - 服务器模型时，我们经常会考虑是使用TCP还是UDP，其实它们二者的区别也很简单：在TCP中连接是谁发起的，在UDP中报文是谁发送的。在TCP中，建立连接是一个非常重要的环节。区别出客户端和服务器，本质上是因为二者编程模型是的不同的。
+服务器端需要在一开始就监听在一个确定的端口上，等待客户端发送请求，一旦有客户端建立连接，服务器端则会消耗一定的计算机资源为它服务。
+客户端相对简单，它向服务器的监听端口发起请求，连接建立之后，通过连接通路和服务器端进行通信。
+还有一点要强调的是，无论是客户端还是服务器端，它们运行的基本单位都是进程（Process），而不是机器。一个客户端，可以同时建立多个到不同服务器的连接；而服务器更是可能在一台机器上部署运行多个服务。
+什么是 socket socket是一种操作系统提供的进程间通信机制。这里并不局限于本地，可以是本地进程间的通信，也可以是远端进程间的通信。在操作系统中，通常会为应用程序提供一组应用程序接口（API），称为套接字接口（socket API）。应用程序可以通过套接字接口来使用套接字（socket），已进行数据交换。
+这里要注意一下，我们常说的TCP和UDP只是传输层协议，是一种约定。TCP三次握手则是基于TCP协议创建网络通路，该通路的具体创建与实现还是socket完成。socket是我们用来建立连接、传输数据的唯一途径。
+如何使用 socket 建立连接 通过前面的客户端 - 服务器模型，我们知道至少需要一对套接字才能进行网络连接的建立，它们分别是服务端套接字和客户端套接字，这里我们先从服务端说起。
+服务端准备连接过程 创建套接字（我们这里会使用 TCP的实现） 绑定监听地址：即为绑定需要监听的 IP地址以及 端口号，这里也可以使用本机 IP，但是考虑到部署环境 IP可能会发生变化，所以这里需要进行 IP地址的绑定（比如进行通配地址指定，或者主机存在多张网卡时指定具体的 IP）。如果不显式的指定端口号，就意味着把端口的选择权交给操作系统内核来处理，操作系统内核会根据一定的算法选择一个空闲的端口，完成套接字的绑定。 开启套接字监听模式：bind函数只是实现套接字与地址的关联，如同登记了电话号码，如果要让别人打通带年华，还需要我们把电话设备接入电话线，让服务器真正处于可接听的状态，这个过程需要依赖 listen函数。这里可以这么理解，socket存在 主动和 被动模式，比如服务器就是处于 被动模式下，它需要等待客户端套接字的 主动连接。而 listen函数便是可以将套接字设置为 被动模式，即告诉内核：“我这个套接字是用来等待用户请求的”。 建立连接（accept阻塞）：在客户端连接请求到达时，服务端应答成功，便完成连接建立。 package com.zhoujian.socket; import java.util.concurrent.ExecutorService; import java.util.concurrent.Executors; /** * 线程池工具类 * @author zhoujian */ public class ExecutorServicePool { /** * 初始化线程池 */ public static ExecutorService executorService = Executors.newFixedThreadPool(10); } package com.</description>
+    </item>
+  </channel>
+</rss>

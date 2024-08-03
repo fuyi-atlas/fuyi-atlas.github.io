@@ -1,0 +1,3 @@
+User-agent: *
+Disallow:
+Sitemap: https://fuyi-atlas.github.io/sitemap.xml

@@ -1,0 +1,636 @@
+<!DOCTYPE html>
+<html lang="en" dir="auto">
+
+<head><meta charset="utf-8">
+<meta http-equiv="X-UA-Compatible" content="IE=edge">
+<meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
+<meta name="robots" content="index, follow">
+<title>Geo Atlas，用于构建矢量切片服务的Java基础库 | Fuyi Atlas</title>
+<meta name="keywords" content="geo atlas">
+<meta name="description" content="Geo Atlas 是什么？ Geo Atlas，译为地理地图册(地理地图集)，就像小时候买到的纸质的地理地图册书本，里面填充着各式各样的地图。所以, 我也希望有那么一个东西，同样可以对外提供各种各样的地图以供使用。
+目前来说，他还只是一个基于Java的开发的，可用于快速构建矢量切片服务的基础库。
+本例中基于Geo Atlas实现了一个精简版本的矢量切片服务，从结果来看，可以将其看作为仅实现了矢量切片功能的GeoServer的精简提升版本。
+背景与动机 首先，我是一个主做服务端开发的GIS开发工程师，平时接触最多的就是管网地图服务发布。此前的工作中没有使用任何平台技术，比如：ArcGIS、超图等，而是使用开源技术。技术栈大体可以总结为：SpringBoot &#43; GeoServer &#43; Mapbox &#43; 空间数据库。
+其次，目前在业务应用上，二维地图还是主流。而二维地图技术里面，属Mapbox Vector Tile的体验最好。所以，目前的技术路线是通过 GeoServer 来发布Vector Tile。
+然后，在 GeoServer 使用中，我发现了这个几个问题：
+受限于其开源协议（GPL 2.0）的约束，你无法通过修改部分源代码的方式，将其直接集成到系统内部。只能是单独部署，通过其提供的REST接口进行交互。基于此，部署方式同样受限。 GeoServer 是一个大而全的东西，同时他是一个单体项目。也就是说，哪怕我只需要提供MWTS&#43;MVT服务，我也需要部署一个全功能的节点，无法按需使用（这里不得不提一下GeoServer Cloud项目，但是它提出得要求更多了，需要一套微服务的环境） 从公谨《WebGIS数据不切片或是时代必然》一文推论，GeoServer中提供的MVT技术（指数据切片过程）已经算是切片起源时代的产物了，而今已经跨过了矢量切片时代（数据还是预切），进入了动态矢量切片时代了 GeoServer中Vector Tile与GeoWebcache中的Tile Meta技术有冲突，瓦片清理存在BUG。可以理解为，GeoServer对于矢量瓦片的支持并不是很好。 不能很好的处理瓦片缓存与动态业务数据的矛盾，即使GeoWebcache提供缓存清理的策略。（Layer中Boundingbox范围问题） GeoServer完全是栅格金字塔技术的实现，不过是将栅格金字塔技术同时应用在栅格数据和矢量数据上，同时他并没有很好的针对不同层级对数据进行抽稀简化（其尝试从服务端配图SLD中获取数据分级规则，我没有测试过，但反对，理由参见: 关于矢量瓦片技术支持前端渲染带来的思考），那么就出现了一个pbf有近20M的情况。同时也回答了为什么现在大家都直接在数据库层面实现矢量瓦片（或者说是在数据源中），一是可以无视数据传递的时间损耗；二是可以直接做抽稀简化，这样出去的数据少了，传输速度自然也快了；三是数据库空间支持已经很成熟了；四是门槛高啊（护城河）
+最后，我也想对我目前的状态做一次总结。那么，Geo Atlas应该就是我最好的总结方式。因为它既可以丰富我的简历🫣，又可以帮助我绘制技能树，完成这一次的总结。
+ps: 当然，还有当下信创的背景原因。就当，抛砖引玉了😧，哈哈哈😬
+特性 遵循 OGC Two Dimensional Tile Matrix Set and Tile Set Metadata Standard 2.0 [并不完全遵循] 尝试遵循 NEW OGC API 提供矢量切片能力 支持自定义数据属性分级规则 支持Google瓦片坐标系(原点在左上角, 默认即为Google瓦片坐标系) 支持3857(900913), 4490投影(即默认提供相应的TileMatrixSet) 支持自定义坐标系及自定义坐标转换行为(源数据坐标系) 支持自定义数据范围(OGC TileMatrixSet Limits，拒绝范围外请求) 提供全局统一的，可快速集成的瓦片缓存组件， 支持基于内存和文件系统的缓存 支持使用GeoPackage进行缓存 支持Seed, Reseed, Truncate三种瓦片缓存处理策略 提供Namespace, Datastore, FeatureLayer元数据管理模块，并提供一个可视化操作界面(Geo Atlas Dashboard) 提供栅格数据切片能力 提供地形数据切片能力 提供按需快速集成能力(将常用功能封装为各种stater) 截图 快速开始 以下说明旨在基于Docker技术快速搭建一个矢量切片服务示例。">
+<meta name="author" content="Fuyi">
+<link rel="canonical" href="https://fuyi-atlas.github.io/posts/program/geo-atlas/001/">
+<link crossorigin="anonymous" href="/assets/css/stylesheet.a61ecc0df414536d559b3d0ca421e2b1de8f39b8a4910b32fedccecbc2c0d59c.css" integrity="sha256-ph7MDfQUU21Vmz0MpCHisd6PObikkQsy/tzOy8LA1Zw=" rel="preload stylesheet" as="style">
+<link rel="icon" href="https://fuyi-atlas.github.io/favicon.ico">
+<link rel="icon" type="image/png" sizes="16x16" href="https://fuyi-atlas.github.io/favicon-16x16.png">
+<link rel="icon" type="image/png" sizes="32x32" href="https://fuyi-atlas.github.io/favicon-32x32.png">
+<link rel="apple-touch-icon" href="https://fuyi-atlas.github.io/apple-touch-icon.png">
+<link rel="mask-icon" href="https://fuyi-atlas.github.io/safari-pinned-tab.svg">
+<meta name="theme-color" content="#2e2e33">
+<meta name="msapplication-TileColor" content="#2e2e33">
+<link rel="alternate" hreflang="en" href="https://fuyi-atlas.github.io/posts/program/geo-atlas/001/">
+<noscript>
+    <style>
+        #theme-toggle,
+        .top-link {
+            display: none;
+        }
+
+    </style>
+    <style>
+        @media (prefers-color-scheme: dark) {
+            :root {
+                --theme: rgb(29, 30, 32);
+                --entry: rgb(46, 46, 51);
+                --primary: rgb(218, 218, 219);
+                --secondary: rgb(155, 156, 157);
+                --tertiary: rgb(65, 66, 68);
+                --content: rgb(196, 196, 197);
+                --code-block-bg: rgb(46, 46, 51);
+                --code-bg: rgb(55, 56, 62);
+                --border: rgb(51, 51, 51);
+            }
+
+            .list {
+                background: var(--theme);
+            }
+
+            .list:not(.dark)::-webkit-scrollbar-track {
+                background: 0 0;
+            }
+
+            .list:not(.dark)::-webkit-scrollbar-thumb {
+                border-color: var(--theme);
+            }
+        }
+
+    </style>
+</noscript><meta property="og:title" content="Geo Atlas，用于构建矢量切片服务的Java基础库" />
+<meta property="og:description" content="Geo Atlas 是什么？ Geo Atlas，译为地理地图册(地理地图集)，就像小时候买到的纸质的地理地图册书本，里面填充着各式各样的地图。所以, 我也希望有那么一个东西，同样可以对外提供各种各样的地图以供使用。
+目前来说，他还只是一个基于Java的开发的，可用于快速构建矢量切片服务的基础库。
+本例中基于Geo Atlas实现了一个精简版本的矢量切片服务，从结果来看，可以将其看作为仅实现了矢量切片功能的GeoServer的精简提升版本。
+背景与动机 首先，我是一个主做服务端开发的GIS开发工程师，平时接触最多的就是管网地图服务发布。此前的工作中没有使用任何平台技术，比如：ArcGIS、超图等，而是使用开源技术。技术栈大体可以总结为：SpringBoot &#43; GeoServer &#43; Mapbox &#43; 空间数据库。
+其次，目前在业务应用上，二维地图还是主流。而二维地图技术里面，属Mapbox Vector Tile的体验最好。所以，目前的技术路线是通过 GeoServer 来发布Vector Tile。
+然后，在 GeoServer 使用中，我发现了这个几个问题：
+受限于其开源协议（GPL 2.0）的约束，你无法通过修改部分源代码的方式，将其直接集成到系统内部。只能是单独部署，通过其提供的REST接口进行交互。基于此，部署方式同样受限。 GeoServer 是一个大而全的东西，同时他是一个单体项目。也就是说，哪怕我只需要提供MWTS&#43;MVT服务，我也需要部署一个全功能的节点，无法按需使用（这里不得不提一下GeoServer Cloud项目，但是它提出得要求更多了，需要一套微服务的环境） 从公谨《WebGIS数据不切片或是时代必然》一文推论，GeoServer中提供的MVT技术（指数据切片过程）已经算是切片起源时代的产物了，而今已经跨过了矢量切片时代（数据还是预切），进入了动态矢量切片时代了 GeoServer中Vector Tile与GeoWebcache中的Tile Meta技术有冲突，瓦片清理存在BUG。可以理解为，GeoServer对于矢量瓦片的支持并不是很好。 不能很好的处理瓦片缓存与动态业务数据的矛盾，即使GeoWebcache提供缓存清理的策略。（Layer中Boundingbox范围问题） GeoServer完全是栅格金字塔技术的实现，不过是将栅格金字塔技术同时应用在栅格数据和矢量数据上，同时他并没有很好的针对不同层级对数据进行抽稀简化（其尝试从服务端配图SLD中获取数据分级规则，我没有测试过，但反对，理由参见: 关于矢量瓦片技术支持前端渲染带来的思考），那么就出现了一个pbf有近20M的情况。同时也回答了为什么现在大家都直接在数据库层面实现矢量瓦片（或者说是在数据源中），一是可以无视数据传递的时间损耗；二是可以直接做抽稀简化，这样出去的数据少了，传输速度自然也快了；三是数据库空间支持已经很成熟了；四是门槛高啊（护城河）
+最后，我也想对我目前的状态做一次总结。那么，Geo Atlas应该就是我最好的总结方式。因为它既可以丰富我的简历🫣，又可以帮助我绘制技能树，完成这一次的总结。
+ps: 当然，还有当下信创的背景原因。就当，抛砖引玉了😧，哈哈哈😬
+特性 遵循 OGC Two Dimensional Tile Matrix Set and Tile Set Metadata Standard 2.0 [并不完全遵循] 尝试遵循 NEW OGC API 提供矢量切片能力 支持自定义数据属性分级规则 支持Google瓦片坐标系(原点在左上角, 默认即为Google瓦片坐标系) 支持3857(900913), 4490投影(即默认提供相应的TileMatrixSet) 支持自定义坐标系及自定义坐标转换行为(源数据坐标系) 支持自定义数据范围(OGC TileMatrixSet Limits，拒绝范围外请求) 提供全局统一的，可快速集成的瓦片缓存组件， 支持基于内存和文件系统的缓存 支持使用GeoPackage进行缓存 支持Seed, Reseed, Truncate三种瓦片缓存处理策略 提供Namespace, Datastore, FeatureLayer元数据管理模块，并提供一个可视化操作界面(Geo Atlas Dashboard) 提供栅格数据切片能力 提供地形数据切片能力 提供按需快速集成能力(将常用功能封装为各种stater) 截图 快速开始 以下说明旨在基于Docker技术快速搭建一个矢量切片服务示例。" />
+<meta property="og:type" content="article" />
+<meta property="og:url" content="https://fuyi-atlas.github.io/posts/program/geo-atlas/001/" /><meta property="article:section" content="posts" />
+<meta property="article:published_time" content="2024-06-24T21:16:17+08:00" />
+<meta property="article:modified_time" content="2024-06-24T21:16:17+08:00" />
+
+<meta name="twitter:card" content="summary"/>
+<meta name="twitter:title" content="Geo Atlas，用于构建矢量切片服务的Java基础库"/>
+<meta name="twitter:description" content="Geo Atlas 是什么？ Geo Atlas，译为地理地图册(地理地图集)，就像小时候买到的纸质的地理地图册书本，里面填充着各式各样的地图。所以, 我也希望有那么一个东西，同样可以对外提供各种各样的地图以供使用。
+目前来说，他还只是一个基于Java的开发的，可用于快速构建矢量切片服务的基础库。
+本例中基于Geo Atlas实现了一个精简版本的矢量切片服务，从结果来看，可以将其看作为仅实现了矢量切片功能的GeoServer的精简提升版本。
+背景与动机 首先，我是一个主做服务端开发的GIS开发工程师，平时接触最多的就是管网地图服务发布。此前的工作中没有使用任何平台技术，比如：ArcGIS、超图等，而是使用开源技术。技术栈大体可以总结为：SpringBoot &#43; GeoServer &#43; Mapbox &#43; 空间数据库。
+其次，目前在业务应用上，二维地图还是主流。而二维地图技术里面，属Mapbox Vector Tile的体验最好。所以，目前的技术路线是通过 GeoServer 来发布Vector Tile。
+然后，在 GeoServer 使用中，我发现了这个几个问题：
+受限于其开源协议（GPL 2.0）的约束，你无法通过修改部分源代码的方式，将其直接集成到系统内部。只能是单独部署，通过其提供的REST接口进行交互。基于此，部署方式同样受限。 GeoServer 是一个大而全的东西，同时他是一个单体项目。也就是说，哪怕我只需要提供MWTS&#43;MVT服务，我也需要部署一个全功能的节点，无法按需使用（这里不得不提一下GeoServer Cloud项目，但是它提出得要求更多了，需要一套微服务的环境） 从公谨《WebGIS数据不切片或是时代必然》一文推论，GeoServer中提供的MVT技术（指数据切片过程）已经算是切片起源时代的产物了，而今已经跨过了矢量切片时代（数据还是预切），进入了动态矢量切片时代了 GeoServer中Vector Tile与GeoWebcache中的Tile Meta技术有冲突，瓦片清理存在BUG。可以理解为，GeoServer对于矢量瓦片的支持并不是很好。 不能很好的处理瓦片缓存与动态业务数据的矛盾，即使GeoWebcache提供缓存清理的策略。（Layer中Boundingbox范围问题） GeoServer完全是栅格金字塔技术的实现，不过是将栅格金字塔技术同时应用在栅格数据和矢量数据上，同时他并没有很好的针对不同层级对数据进行抽稀简化（其尝试从服务端配图SLD中获取数据分级规则，我没有测试过，但反对，理由参见: 关于矢量瓦片技术支持前端渲染带来的思考），那么就出现了一个pbf有近20M的情况。同时也回答了为什么现在大家都直接在数据库层面实现矢量瓦片（或者说是在数据源中），一是可以无视数据传递的时间损耗；二是可以直接做抽稀简化，这样出去的数据少了，传输速度自然也快了；三是数据库空间支持已经很成熟了；四是门槛高啊（护城河）
+最后，我也想对我目前的状态做一次总结。那么，Geo Atlas应该就是我最好的总结方式。因为它既可以丰富我的简历🫣，又可以帮助我绘制技能树，完成这一次的总结。
+ps: 当然，还有当下信创的背景原因。就当，抛砖引玉了😧，哈哈哈😬
+特性 遵循 OGC Two Dimensional Tile Matrix Set and Tile Set Metadata Standard 2.0 [并不完全遵循] 尝试遵循 NEW OGC API 提供矢量切片能力 支持自定义数据属性分级规则 支持Google瓦片坐标系(原点在左上角, 默认即为Google瓦片坐标系) 支持3857(900913), 4490投影(即默认提供相应的TileMatrixSet) 支持自定义坐标系及自定义坐标转换行为(源数据坐标系) 支持自定义数据范围(OGC TileMatrixSet Limits，拒绝范围外请求) 提供全局统一的，可快速集成的瓦片缓存组件， 支持基于内存和文件系统的缓存 支持使用GeoPackage进行缓存 支持Seed, Reseed, Truncate三种瓦片缓存处理策略 提供Namespace, Datastore, FeatureLayer元数据管理模块，并提供一个可视化操作界面(Geo Atlas Dashboard) 提供栅格数据切片能力 提供地形数据切片能力 提供按需快速集成能力(将常用功能封装为各种stater) 截图 快速开始 以下说明旨在基于Docker技术快速搭建一个矢量切片服务示例。"/>
+
+
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "BreadcrumbList",
+  "itemListElement": [
+    {
+      "@type": "ListItem",
+      "position":  1 ,
+      "name": "Posts",
+      "item": "https://fuyi-atlas.github.io/posts/"
+    }, 
+    {
+      "@type": "ListItem",
+      "position":  2 ,
+      "name": "Geo Atlas，用于构建矢量切片服务的Java基础库",
+      "item": "https://fuyi-atlas.github.io/posts/program/geo-atlas/001/"
+    }
+  ]
+}
+</script>
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "BlogPosting",
+  "headline": "Geo Atlas，用于构建矢量切片服务的Java基础库",
+  "name": "Geo Atlas，用于构建矢量切片服务的Java基础库",
+  "description": "Geo Atlas 是什么？ Geo Atlas，译为地理地图册(地理地图集)，就像小时候买到的纸质的地理地图册书本，里面填充着各式各样的地图。所以, 我也希望有那么一个东西，同样可以对外提供各种各样的地图以供使用。\n目前来说，他还只是一个基于Java的开发的，可用于快速构建矢量切片服务的基础库。\n本例中基于Geo Atlas实现了一个精简版本的矢量切片服务，从结果来看，可以将其看作为仅实现了矢量切片功能的GeoServer的精简提升版本。\n背景与动机 首先，我是一个主做服务端开发的GIS开发工程师，平时接触最多的就是管网地图服务发布。此前的工作中没有使用任何平台技术，比如：ArcGIS、超图等，而是使用开源技术。技术栈大体可以总结为：SpringBoot + GeoServer + Mapbox + 空间数据库。\n其次，目前在业务应用上，二维地图还是主流。而二维地图技术里面，属Mapbox Vector Tile的体验最好。所以，目前的技术路线是通过 GeoServer 来发布Vector Tile。\n然后，在 GeoServer 使用中，我发现了这个几个问题：\n受限于其开源协议（GPL 2.0）的约束，你无法通过修改部分源代码的方式，将其直接集成到系统内部。只能是单独部署，通过其提供的REST接口进行交互。基于此，部署方式同样受限。 GeoServer 是一个大而全的东西，同时他是一个单体项目。也就是说，哪怕我只需要提供MWTS+MVT服务，我也需要部署一个全功能的节点，无法按需使用（这里不得不提一下GeoServer Cloud项目，但是它提出得要求更多了，需要一套微服务的环境） 从公谨《WebGIS数据不切片或是时代必然》一文推论，GeoServer中提供的MVT技术（指数据切片过程）已经算是切片起源时代的产物了，而今已经跨过了矢量切片时代（数据还是预切），进入了动态矢量切片时代了 GeoServer中Vector Tile与GeoWebcache中的Tile Meta技术有冲突，瓦片清理存在BUG。可以理解为，GeoServer对于矢量瓦片的支持并不是很好。 不能很好的处理瓦片缓存与动态业务数据的矛盾，即使GeoWebcache提供缓存清理的策略。（Layer中Boundingbox范围问题） GeoServer完全是栅格金字塔技术的实现，不过是将栅格金字塔技术同时应用在栅格数据和矢量数据上，同时他并没有很好的针对不同层级对数据进行抽稀简化（其尝试从服务端配图SLD中获取数据分级规则，我没有测试过，但反对，理由参见: 关于矢量瓦片技术支持前端渲染带来的思考），那么就出现了一个pbf有近20M的情况。同时也回答了为什么现在大家都直接在数据库层面实现矢量瓦片（或者说是在数据源中），一是可以无视数据传递的时间损耗；二是可以直接做抽稀简化，这样出去的数据少了，传输速度自然也快了；三是数据库空间支持已经很成熟了；四是门槛高啊（护城河）\n最后，我也想对我目前的状态做一次总结。那么，Geo Atlas应该就是我最好的总结方式。因为它既可以丰富我的简历🫣，又可以帮助我绘制技能树，完成这一次的总结。\nps: 当然，还有当下信创的背景原因。就当，抛砖引玉了😧，哈哈哈😬\n特性 遵循 OGC Two Dimensional Tile Matrix Set and Tile Set Metadata Standard 2.0 [并不完全遵循] 尝试遵循 NEW OGC API 提供矢量切片能力 支持自定义数据属性分级规则 支持Google瓦片坐标系(原点在左上角, 默认即为Google瓦片坐标系) 支持3857(900913), 4490投影(即默认提供相应的TileMatrixSet) 支持自定义坐标系及自定义坐标转换行为(源数据坐标系) 支持自定义数据范围(OGC TileMatrixSet Limits，拒绝范围外请求) 提供全局统一的，可快速集成的瓦片缓存组件， 支持基于内存和文件系统的缓存 支持使用GeoPackage进行缓存 支持Seed, Reseed, Truncate三种瓦片缓存处理策略 提供Namespace, Datastore, FeatureLayer元数据管理模块，并提供一个可视化操作界面(Geo Atlas Dashboard) 提供栅格数据切片能力 提供地形数据切片能力 提供按需快速集成能力(将常用功能封装为各种stater) 截图 快速开始 以下说明旨在基于Docker技术快速搭建一个矢量切片服务示例。",
+  "keywords": [
+    "geo atlas"
+  ],
+  "articleBody": "Geo Atlas 是什么？ Geo Atlas，译为地理地图册(地理地图集)，就像小时候买到的纸质的地理地图册书本，里面填充着各式各样的地图。所以, 我也希望有那么一个东西，同样可以对外提供各种各样的地图以供使用。\n目前来说，他还只是一个基于Java的开发的，可用于快速构建矢量切片服务的基础库。\n本例中基于Geo Atlas实现了一个精简版本的矢量切片服务，从结果来看，可以将其看作为仅实现了矢量切片功能的GeoServer的精简提升版本。\n背景与动机 首先，我是一个主做服务端开发的GIS开发工程师，平时接触最多的就是管网地图服务发布。此前的工作中没有使用任何平台技术，比如：ArcGIS、超图等，而是使用开源技术。技术栈大体可以总结为：SpringBoot + GeoServer + Mapbox + 空间数据库。\n其次，目前在业务应用上，二维地图还是主流。而二维地图技术里面，属Mapbox Vector Tile的体验最好。所以，目前的技术路线是通过 GeoServer 来发布Vector Tile。\n然后，在 GeoServer 使用中，我发现了这个几个问题：\n受限于其开源协议（GPL 2.0）的约束，你无法通过修改部分源代码的方式，将其直接集成到系统内部。只能是单独部署，通过其提供的REST接口进行交互。基于此，部署方式同样受限。 GeoServer 是一个大而全的东西，同时他是一个单体项目。也就是说，哪怕我只需要提供MWTS+MVT服务，我也需要部署一个全功能的节点，无法按需使用（这里不得不提一下GeoServer Cloud项目，但是它提出得要求更多了，需要一套微服务的环境） 从公谨《WebGIS数据不切片或是时代必然》一文推论，GeoServer中提供的MVT技术（指数据切片过程）已经算是切片起源时代的产物了，而今已经跨过了矢量切片时代（数据还是预切），进入了动态矢量切片时代了 GeoServer中Vector Tile与GeoWebcache中的Tile Meta技术有冲突，瓦片清理存在BUG。可以理解为，GeoServer对于矢量瓦片的支持并不是很好。 不能很好的处理瓦片缓存与动态业务数据的矛盾，即使GeoWebcache提供缓存清理的策略。（Layer中Boundingbox范围问题） GeoServer完全是栅格金字塔技术的实现，不过是将栅格金字塔技术同时应用在栅格数据和矢量数据上，同时他并没有很好的针对不同层级对数据进行抽稀简化（其尝试从服务端配图SLD中获取数据分级规则，我没有测试过，但反对，理由参见: 关于矢量瓦片技术支持前端渲染带来的思考），那么就出现了一个pbf有近20M的情况。同时也回答了为什么现在大家都直接在数据库层面实现矢量瓦片（或者说是在数据源中），一是可以无视数据传递的时间损耗；二是可以直接做抽稀简化，这样出去的数据少了，传输速度自然也快了；三是数据库空间支持已经很成熟了；四是门槛高啊（护城河）\n最后，我也想对我目前的状态做一次总结。那么，Geo Atlas应该就是我最好的总结方式。因为它既可以丰富我的简历🫣，又可以帮助我绘制技能树，完成这一次的总结。\nps: 当然，还有当下信创的背景原因。就当，抛砖引玉了😧，哈哈哈😬\n特性 遵循 OGC Two Dimensional Tile Matrix Set and Tile Set Metadata Standard 2.0 [并不完全遵循] 尝试遵循 NEW OGC API 提供矢量切片能力 支持自定义数据属性分级规则 支持Google瓦片坐标系(原点在左上角, 默认即为Google瓦片坐标系) 支持3857(900913), 4490投影(即默认提供相应的TileMatrixSet) 支持自定义坐标系及自定义坐标转换行为(源数据坐标系) 支持自定义数据范围(OGC TileMatrixSet Limits，拒绝范围外请求) 提供全局统一的，可快速集成的瓦片缓存组件， 支持基于内存和文件系统的缓存 支持使用GeoPackage进行缓存 支持Seed, Reseed, Truncate三种瓦片缓存处理策略 提供Namespace, Datastore, FeatureLayer元数据管理模块，并提供一个可视化操作界面(Geo Atlas Dashboard) 提供栅格数据切片能力 提供地形数据切片能力 提供按需快速集成能力(将常用功能封装为各种stater) 截图 快速开始 以下说明旨在基于Docker技术快速搭建一个矢量切片服务示例。\nGeospatial Data Source(With some data) 💡 提供下载的是矢量数据，不是最终地图，与符号化后的地图再可视化表达上存在一定差异。用户利用此数据编制地图，应当严格执行《地图管理条例》有关规定；编制的地图如需向社会公开的，还应当依法履行地图审核程序。\n💡 数据仅供学习研究使用\nTiles API Service(Backend)\nGeo Atlas Dashboard(Frontend)\n请确保你已经安装好了Java, Maven, Docker以及Docker Compose。 我测试使用Wsl2(Windows11) + Docker Desktop(4.30.0) + Apache Maven 3.8.7 + Oracle jdk 11.0.20\n克隆代码\ngit clone --recursive https://github.com/geoatlas-cloud/geo-atlas.git cd geo-atlas/ 配置环境变量\ncp .env.production.local.template .env.production.local 然后手动修改配置文件, 将其中的配置项修改为你自己的配置，如:\nHOST_IP：宿主机IP POSTGRES_PASSWORD：PostgreSQL数据库初始化密码 JASYPT_ENCRYPTOR_PASSWORD：用于加密数据库账户信息的密钥 CACHE_ENABLED：是否开启缓存 NEXT_PUBLIC_BASE_MAP_TYPE：地图类型, osm|tianditu NEXT_PUBLIC_BASE_MAP_TILE_KEY：当使用天地图时需要填写key，4490经纬度投影默认使用天地图，如果需要进行4490经纬度投影预览还请填写天地图Key 执行构建脚本, 拉起服务\nchmod +x ./build2run.sh ./build2run.sh 等待服务启动完成后访问: http://localhost:11003, 而后按照GeoServer的使用习惯, 逐步创建\nnamespace datastore feature layer 可通过预览的方式检查瓦片服务是否正常 默认给出的数据为我国的境界与政区数据, 来自省市县数据CTAmap, 源自1：100万公众版基础地理信息数据（2021） 其实我也曾提取过境界与政区数据(全国1:100万基础地理信息数据-境界与政区提取), 不过与上述数据相比而言比较粗糙, 后由于时间关系没有进行细化, 所以没有使用\n在提供境界与政区数据的同时, 还支持切换为OSM China的数据。 OSM-China数据的处理过程大致为: 将源数据通过Osm2pgsql入库, 而后使用pg_dump制作转储文件, 并基于此转储文件制作PostGIS镜像, 在容器初始化的时候会自动恢复数据。 但是转储后的文件比较大, 导致镜像也比较大, 同时数据比较多导致恢复的时候比较慢。如果将其作为示例中的数据源的话, 那么三个服务全部启动完成耗时估计得有5分钟了, 所以并未将其作为默认得数据源。\n如果你想要使用OSM的数据测试, 可以将其作为额外的数据源进行连接, 这样就不会影响示例应用的初步体验了\n指南 点击图片跳转B站\n技术概览 基于GeoTools、GeoWebCache进行Geo Atlas构建，基于Spring Boot Framework对外提供快速集成能力。\nGeoTools提供矢量数据读取以及坐标转换能力 在此对GeoWebCache进行了拆分为两个部分：分别是金字塔(pyramid, 提供瓦片索引与瓦片生成能力)与瓦片缓存(tile-cache, 提供瓦片缓存能力) Mapbox Vector Tile Generator 由 java-vector-tile 提供支持\n系统架构概述 下图描述了系统的总体架构。\n此处更多的表达了内部结构与层次关系，无关部署\n组件概述 APP\nGeo Atlas Dashboard: 可视化操作界面 Tiles API Application: 提供矢量切片服务的应用程序(同时支持Dashboard) Boot\nTiles API Boot Stater: 对Tiles API的快速集成封装, 约定大于配置 Component\nMetadata Mgmt: 提供Namespace, Datastore, FeatureLayer元数据管理模块 Tile Cache: 提供瓦片缓存能力, 目前支持基于内存, 文件系统两种缓存方式, 可任意组合 OGC APIS: 提供OGC APIs, 目前仅支持Tiles API Library\nBase References: 基础依赖声明 Pyramid Model: 金字塔模型, 用于构建瓦片金字塔结构索引, 同时提供切片管道 Tile Generator: 瓦片生成器, 目前仅支持Mapbox Vector Tile Generator External Data Sources\nConfig Storage: 用于存储Namespace, Datastore, FeatureLayer等元数据 Geospatial Data Source: 用于存储矢量数据, 如PostGIS、SQLServer 构建 克隆代码\ngit clone --recursive https://github.com/geoatlas-cloud/geo-atlas.git cd geo-atlas/ 要构建应用程序，请从根项目目录运行以下命令, 或者使用IDEA的Maven插件\nmvn clean install -DskipTests 运行调试 配置环境变量, 默认使用dev环境(当然，你可以直接修改dev.yml文件, 而不是通过环境变量控制)\n自行用IDEA打开项目，然后运行Application类。\n支持 thread.zhou@gmail.com thread_zhou@126.com 声明与致谢 Geo Atlas现版本参照GeoServer应用模式构建，并参考了GeoServer以及GeoServer Cloud的实现方式 Pyramid、IO(in Library)、Tile Cache模块均来自GeoWebCache, 是对其进行了拆解和少量变更 矢量数据的读取与坐标转换使用GeoTools Mapbox Vector Tile Generator由 java-vector-tile 提供支持 ",
+  "wordCount" : "300",
+  "inLanguage": "en",
+  "datePublished": "2024-06-24T21:16:17+08:00",
+  "dateModified": "2024-06-24T21:16:17+08:00",
+  "author":{
+    "@type": "Person",
+    "name": "Fuyi"
+  },
+  "mainEntityOfPage": {
+    "@type": "WebPage",
+    "@id": "https://fuyi-atlas.github.io/posts/program/geo-atlas/001/"
+  },
+  "publisher": {
+    "@type": "Organization",
+    "name": "Fuyi Atlas",
+    "logo": {
+      "@type": "ImageObject",
+      "url": "https://fuyi-atlas.github.io/favicon.ico"
+    }
+  }
+}
+</script>
+</head>
+
+<body class="" id="top">
+<script>
+    if (localStorage.getItem("pref-theme") === "dark") {
+        document.body.classList.add('dark');
+    } else if (localStorage.getItem("pref-theme") === "light") {
+        document.body.classList.remove('dark')
+    } else if (window.matchMedia('(prefers-color-scheme: dark)').matches) {
+        document.body.classList.add('dark');
+    }
+
+</script>
+
+<header class="header">
+    <nav class="nav">
+        <div class="logo">
+            <a href="https://fuyi-atlas.github.io/" accesskey="h" title="Fuyi Atlas (Alt + H)">Fuyi Atlas</a>
+            <div class="logo-switches">
+                <button id="theme-toggle" accesskey="t" title="(Alt + T)">
+                    <svg id="moon" xmlns="http://www.w3.org/2000/svg" width="24" height="18" viewBox="0 0 24 24"
+                        fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"
+                        stroke-linejoin="round">
+                        <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path>
+                    </svg>
+                    <svg id="sun" xmlns="http://www.w3.org/2000/svg" width="24" height="18" viewBox="0 0 24 24"
+                        fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"
+                        stroke-linejoin="round">
+                        <circle cx="12" cy="12" r="5"></circle>
+                        <line x1="12" y1="1" x2="12" y2="3"></line>
+                        <line x1="12" y1="21" x2="12" y2="23"></line>
+                        <line x1="4.22" y1="4.22" x2="5.64" y2="5.64"></line>
+                        <line x1="18.36" y1="18.36" x2="19.78" y2="19.78"></line>
+                        <line x1="1" y1="12" x2="3" y2="12"></line>
+                        <line x1="21" y1="12" x2="23" y2="12"></line>
+                        <line x1="4.22" y1="19.78" x2="5.64" y2="18.36"></line>
+                        <line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line>
+                    </svg>
+                </button>
+                <ul class="lang-switch"><li>|</li>
+                    <li>
+                        <a href="https://fuyi-atlas.github.io/zh/" title="Chinese"
+                            aria-label="Chinese">Zh</a>
+                    </li>
+                </ul>
+            </div>
+        </div>
+        <ul id="menu">
+            <li>
+                <a href="https://fuyi-atlas.github.io/archives/" title="Archive">
+                    <span>Archive</span>
+                </a>
+            </li>
+            <li>
+                <a href="https://fuyi-atlas.github.io/search/" title="Search (Alt &#43; /)" accesskey=/>
+                    <span>Search</span>
+                </a>
+            </li>
+            <li>
+                <a href="https://fuyi-atlas.github.io/categories/" title="Categories">
+                    <span>Categories</span>
+                </a>
+            </li>
+            <li>
+                <a href="https://fuyi-atlas.github.io/tags/" title="Tags">
+                    <span>Tags</span>
+                </a>
+            </li>
+        </ul>
+    </nav>
+</header>
+<main class="main">
+
+<article class="post-single">
+  <header class="post-header">
+    <div class="breadcrumbs"><a href="https://fuyi-atlas.github.io/">Home</a>&nbsp;»&nbsp;<a href="https://fuyi-atlas.github.io/posts/">Posts</a></div>
+    <h1 class="post-title entry-hint-parent">
+      Geo Atlas，用于构建矢量切片服务的Java基础库
+    </h1>
+    <div class="post-meta"><span title='2024-06-24 21:16:17 +0800 CST'>June 24, 2024</span>&nbsp;·&nbsp;2 min&nbsp;·&nbsp;Fuyi
+
+</div>
+  </header> <div class="toc">
+    <details >
+        <summary accesskey="c" title="(Alt + C)">
+            <span class="details">Table of Contents</span>
+        </summary>
+
+        <div class="inner"><ul>
+                <li>
+                    <a href="#geo-atlas-%e6%98%af%e4%bb%80%e4%b9%88" aria-label="Geo Atlas 是什么？">Geo Atlas 是什么？</a></li>
+                <li>
+                    <a href="#%e8%83%8c%e6%99%af%e4%b8%8e%e5%8a%a8%e6%9c%ba" aria-label="背景与动机">背景与动机</a></li>
+                <li>
+                    <a href="#%e7%89%b9%e6%80%a7" aria-label="特性">特性</a></li>
+                <li>
+                    <a href="#%e6%88%aa%e5%9b%be" aria-label="截图">截图</a></li>
+                <li>
+                    <a href="#%e5%bf%ab%e9%80%9f%e5%bc%80%e5%a7%8b" aria-label="快速开始">快速开始</a><ul>
+                        
+                <li>
+                    <a href="#%e6%8c%87%e5%8d%97" aria-label="指南">指南</a></li></ul>
+                </li>
+                <li>
+                    <a href="#%e6%8a%80%e6%9c%af%e6%a6%82%e8%a7%88" aria-label="技术概览">技术概览</a><ul>
+                        
+                <li>
+                    <a href="#%e7%b3%bb%e7%bb%9f%e6%9e%b6%e6%9e%84%e6%a6%82%e8%bf%b0" aria-label="系统架构概述">系统架构概述</a></li>
+                <li>
+                    <a href="#%e7%bb%84%e4%bb%b6%e6%a6%82%e8%bf%b0" aria-label="组件概述">组件概述</a></li></ul>
+                </li>
+                <li>
+                    <a href="#%e6%9e%84%e5%bb%ba" aria-label="构建">构建</a><ul>
+                        
+                <li>
+                    <a href="#%e8%bf%90%e8%a1%8c%e8%b0%83%e8%af%95" aria-label="运行调试">运行调试</a></li></ul>
+                </li>
+                <li>
+                    <a href="#%e6%94%af%e6%8c%81" aria-label="支持">支持</a></li>
+                <li>
+                    <a href="#%e5%a3%b0%e6%98%8e%e4%b8%8e%e8%87%b4%e8%b0%a2" aria-label="声明与致谢">声明与致谢</a>
+                </li>
+            </ul>
+        </div>
+    </details>
+</div>
+
+  <div class="post-content"><h2 id="geo-atlas-是什么">Geo Atlas 是什么？<a hidden class="anchor" aria-hidden="true" href="#geo-atlas-是什么">#</a></h2>
+<p><a href="https://github.com/geoatlas-cloud/geo-atlas">Geo Atlas</a>，译为地理地图册(地理地图集)，就像小时候买到的纸质的地理地图册书本，里面填充着各式各样的地图。所以, 我也希望有那么一个东西，同样可以对外提供各种各样的地图以供使用。</p>
+<p>目前来说，他还只是一个基于Java的开发的，可用于快速构建矢量切片服务的基础库。</p>
+<blockquote>
+<p>本例中基于Geo Atlas实现了一个精简版本的矢量切片服务，从结果来看，可以将其看作为仅实现了矢量切片功能的GeoServer的精简提升版本。</p>
+</blockquote>
+<h2 id="背景与动机">背景与动机<a hidden class="anchor" aria-hidden="true" href="#背景与动机">#</a></h2>
+<p>首先，我是一个主做服务端开发的GIS开发工程师，平时接触最多的就是管网地图服务发布。此前的工作中没有使用任何平台技术，比如：ArcGIS、超图等，而是使用开源技术。技术栈大体可以总结为：SpringBoot + GeoServer + Mapbox + 空间数据库。</p>
+<p>其次，目前在业务应用上，二维地图还是主流。而二维地图技术里面，属Mapbox Vector Tile的体验最好。所以，目前的技术路线是通过 GeoServer 来发布Vector Tile。</p>
+<p>然后，在 GeoServer 使用中，我发现了这个几个问题：</p>
+<ul>
+<li>受限于其开源协议（GPL 2.0）的约束，你无法通过修改部分源代码的方式，将其直接集成到系统内部。只能是单独部署，通过其提供的REST接口进行交互。基于此，部署方式同样受限。</li>
+<li>GeoServer 是一个大而全的东西，同时他是一个单体项目。也就是说，哪怕我只需要提供MWTS+MVT服务，我也需要部署一个全功能的节点，无法按需使用（这里不得不提一下GeoServer Cloud项目，但是它提出得要求更多了，需要一套微服务的环境）</li>
+<li>从公谨<a href="https://zhuanlan.zhihu.com/p/512298212">《WebGIS数据不切片或是时代必然》</a>一文推论，GeoServer中提供的MVT技术（指数据切片过程）已经算是切片起源时代的产物了，而今已经跨过了矢量切片时代（数据还是预切），进入了动态矢量切片时代了</li>
+<li>GeoServer中Vector Tile与GeoWebcache中的Tile Meta技术有冲突，瓦片清理存在BUG。可以理解为，GeoServer对于矢量瓦片的支持并不是很好。</li>
+<li>不能很好的处理瓦片缓存与动态业务数据的矛盾，即使GeoWebcache提供缓存清理的策略。（Layer中Boundingbox范围问题）</li>
+</ul>
+<blockquote>
+<p>GeoServer完全是栅格金字塔技术的实现，不过是将栅格金字塔技术同时应用在栅格数据和矢量数据上，同时他并没有很好的针对不同层级对数据进行抽稀简化（其尝试从服务端配图SLD中获取数据分级规则，我没有测试过，但反对，理由参见: <a href="https://fuyi-atlas.github.io/posts/gis/thoughts-on-mvt-front-end-rendering/">关于矢量瓦片技术支持前端渲染带来的思考</a>），那么就出现了一个pbf有近20M的情况。同时也回答了为什么现在大家都直接在数据库层面实现矢量瓦片（或者说是在数据源中），一是可以无视数据传递的时间损耗；二是可以直接做抽稀简化，这样出去的数据少了，传输速度自然也快了；三是数据库空间支持已经很成熟了；四是门槛高啊（护城河）</p>
+</blockquote>
+<p>最后，我也想对我目前的状态做一次总结。那么，Geo Atlas应该就是我最好的总结方式。因为它既可以丰富我的简历🫣，又可以帮助我绘制技能树，完成这一次的总结。</p>
+<hr>
+<p>ps: 当然，还有当下信创的背景原因。就当，抛砖引玉了😧，哈哈哈😬</p>
+<h2 id="特性">特性<a hidden class="anchor" aria-hidden="true" href="#特性">#</a></h2>
+<ul>
+<li><input checked="" disabled="" type="checkbox"> 遵循 <a href="https://docs.ogc.org/is/17-083r4/17-083r4.html">OGC Two Dimensional Tile Matrix Set and Tile Set Metadata Standard 2.0</a> [并不完全遵循]</li>
+<li><input disabled="" type="checkbox"> 尝试遵循 <a href="https://ogcapi.ogc.org/#standards">NEW OGC API</a></li>
+<li><input checked="" disabled="" type="checkbox"> 提供矢量切片能力</li>
+<li><input checked="" disabled="" type="checkbox"> 支持自定义数据属性分级规则</li>
+<li><input checked="" disabled="" type="checkbox"> 支持Google瓦片坐标系(原点在左上角, 默认即为Google瓦片坐标系)</li>
+<li><input checked="" disabled="" type="checkbox"> 支持3857(900913), 4490投影(即默认提供相应的TileMatrixSet)</li>
+<li><input disabled="" type="checkbox"> 支持自定义坐标系及自定义坐标转换行为(源数据坐标系)</li>
+<li><input checked="" disabled="" type="checkbox"> 支持自定义数据范围(OGC TileMatrixSet Limits，拒绝范围外请求)</li>
+<li><input checked="" disabled="" type="checkbox"> 提供全局统一的，可快速集成的瓦片缓存组件，</li>
+<li><input checked="" disabled="" type="checkbox"> 支持基于内存和文件系统的缓存</li>
+<li><input disabled="" type="checkbox"> 支持使用GeoPackage进行缓存</li>
+<li><input checked="" disabled="" type="checkbox"> 支持Seed, Reseed, Truncate三种瓦片缓存处理策略</li>
+<li><input checked="" disabled="" type="checkbox"> 提供Namespace, Datastore, FeatureLayer元数据管理模块，并提供一个可视化操作界面(Geo Atlas Dashboard)</li>
+<li><input disabled="" type="checkbox"> 提供栅格数据切片能力</li>
+<li><input disabled="" type="checkbox"> 提供地形数据切片能力</li>
+<li><input checked="" disabled="" type="checkbox"> 提供按需快速集成能力(将常用功能封装为各种stater)</li>
+</ul>
+<h2 id="截图">截图<a hidden class="anchor" aria-hidden="true" href="#截图">#</a></h2>
+<p><img loading="lazy" src="https://zhou-fuyi.github.io/picx-images-hosting/geo-atlas-001.969lwd4n6p.webp" alt="geo-atlas-001"  />
+
+<img loading="lazy" src="https://zhou-fuyi.github.io/picx-images-hosting/geo-atlas-002.51e0k97h42.webp" alt="geo-atlas-002"  />
+
+<img loading="lazy" src="https://zhou-fuyi.github.io/picx-images-hosting/geo-atlas-cover-pic.7w6oq1mnx0.webp" alt="geo-atlas-cover-pic"  />
+
+<img loading="lazy" src="https://zhou-fuyi.github.io/picx-images-hosting/geo-atlas-003.1e8gwqbomb.webp" alt="geo-atlas-003"  />
+
+<img loading="lazy" src="https://zhou-fuyi.github.io/picx-images-hosting/geo-atlas-004.1ovapvqwrv.webp" alt="geo-atlas-004"  />
+
+<img loading="lazy" src="https://zhou-fuyi.github.io/picx-images-hosting/geo-atlas-005.ibzha206k.webp" alt="geo-atlas-005"  />
+
+<img loading="lazy" src="https://zhou-fuyi.github.io/picx-images-hosting/geo-atlas-006.77df60z4vw.webp" alt="geo-atlas-006"  />
+
+<img loading="lazy" src="https://zhou-fuyi.github.io/picx-images-hosting/geo-atlas-007.6f0joaij65.webp" alt="geo-atlas-007"  />
+</p>
+<h2 id="快速开始">快速开始<a hidden class="anchor" aria-hidden="true" href="#快速开始">#</a></h2>
+<p>以下说明旨在基于Docker技术快速搭建一个矢量切片服务示例。</p>
+<ul>
+<li>
+<p>Geospatial Data Source(With some data)
+<img loading="lazy" src="https://zhou-fuyi.github.io/picx-images-hosting/china_bounds_data_structure.ibzha2066.webp" alt="china_bounds_data_structure"  />
+</p>
+<blockquote>
+<p>💡 <font style="color:red">提供下载的是矢量数据，不是最终地图，与符号化后的地图再可视化表达上存在一定差异。用户利用此数据编制地图，应当严格执行《地图管理条例》有关规定；编制的地图如需向社会公开的，还应当依法履行地图审核程序。</font></p>
+</blockquote>
+<blockquote>
+<p>💡 <font style="color:orange"> 数据仅供学习研究使用</font></p>
+</blockquote>
+</li>
+<li>
+<p>Tiles API Service(Backend)</p>
+</li>
+<li>
+<p>Geo Atlas Dashboard(Frontend)</p>
+</li>
+</ul>
+<blockquote>
+<p>请确保你已经安装好了Java, Maven, Docker以及Docker Compose。
+我测试使用Wsl2(Windows11) + Docker Desktop(4.30.0) + Apache Maven 3.8.7 + Oracle jdk 11.0.20</p>
+</blockquote>
+<ol>
+<li>
+<p>克隆代码</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-shell" data-lang="shell"><span class="line"><span class="cl">git clone --recursive https://github.com/geoatlas-cloud/geo-atlas.git
+</span></span><span class="line"><span class="cl"><span class="nb">cd</span> geo-atlas/
+</span></span></code></pre></div></li>
+<li>
+<p>配置环境变量</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-shell" data-lang="shell"><span class="line"><span class="cl">cp .env.production.local.template .env.production.local
+</span></span></code></pre></div><p>然后手动修改配置文件, 将其中的配置项修改为你自己的配置，如:</p>
+<ul>
+<li>HOST_IP：宿主机IP</li>
+<li>POSTGRES_PASSWORD：PostgreSQL数据库初始化密码</li>
+<li>JASYPT_ENCRYPTOR_PASSWORD：用于加密数据库账户信息的密钥</li>
+<li>CACHE_ENABLED：是否开启缓存</li>
+<li>NEXT_PUBLIC_BASE_MAP_TYPE：地图类型, osm|tianditu</li>
+<li>NEXT_PUBLIC_BASE_MAP_TILE_KEY：当使用天地图时需要填写key，4490经纬度投影默认使用天地图，如果需要进行4490经纬度投影预览还请填写天地图Key</li>
+</ul>
+</li>
+<li>
+<p>执行构建脚本, 拉起服务</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-shell" data-lang="shell"><span class="line"><span class="cl">chmod +x ./build2run.sh
+</span></span><span class="line"><span class="cl">./build2run.sh
+</span></span></code></pre></div></li>
+</ol>
+<p>等待服务启动完成后访问: <code>http://localhost:11003</code>, 而后按照GeoServer的使用习惯, 逐步创建</p>
+<ul>
+<li>namespace</li>
+<li>datastore</li>
+<li>feature layer
+可通过预览的方式检查瓦片服务是否正常</li>
+</ul>
+<blockquote>
+<p>默认给出的数据为我国的境界与政区数据, 来自<a href="https://www.shengshixian.com/">省市县数据CTAmap</a>, 源自<a href="https://www.webmap.cn/commres.do?method=result100W">1：100万公众版基础地理信息数据（2021）</a>
+其实我也曾提取过境界与政区数据(<a href="https://fuyi-atlas.github.io/posts/program/micro-weather/006/">全国1:100万基础地理信息数据-境界与政区提取</a>), 不过与上述数据相比而言比较粗糙, 后由于时间关系没有进行细化, 所以没有使用</p>
+<p>在提供境界与政区数据的同时, 还支持切换为<a href="https://hub.docker.com/repository/docker/threadzhou/ga-geospatial-osm-china/general">OSM China</a>的数据。 OSM-China数据的处理过程大致为: 将源数据通过Osm2pgsql入库, 而后使用pg_dump制作转储文件, 并基于此转储文件制作PostGIS镜像, 在容器初始化的时候会自动恢复数据。
+但是转储后的文件比较大, 导致镜像也比较大, 同时数据比较多导致恢复的时候比较慢。如果将其作为示例中的数据源的话, 那么三个服务全部启动完成耗时估计得有5分钟了, 所以并未将其作为默认得数据源。</p>
+<p>如果你想要使用OSM的数据测试, 可以将其作为额外的数据源进行连接, 这样就不会影响示例应用的初步体验了</p>
+</blockquote>
+<h3 id="指南">指南<a hidden class="anchor" aria-hidden="true" href="#指南">#</a></h3>
+<p>点击图片跳转B站</p>
+<p><a href="https://www.bilibili.com/video/BV1oAgSenEq5/?vd_source=a3d6ac851199bb1b577a99305af58486"><img loading="lazy" src="https://zhou-fuyi.github.io/picx-images-hosting/geo-atlas-cover-pic.7w6oq1mnx0.webp" alt="Geo Atlas Quickstart-封面"  />
+</a></p>
+<h2 id="技术概览">技术概览<a hidden class="anchor" aria-hidden="true" href="#技术概览">#</a></h2>
+<p>基于GeoTools、GeoWebCache进行Geo Atlas构建，基于Spring Boot Framework对外提供快速集成能力。</p>
+<ul>
+<li>GeoTools提供矢量数据读取以及坐标转换能力</li>
+<li>在此对GeoWebCache进行了拆分为两个部分：分别是金字塔(pyramid, 提供瓦片索引与瓦片生成能力)与瓦片缓存(tile-cache, 提供瓦片缓存能力)</li>
+</ul>
+<blockquote>
+<p>Mapbox Vector Tile Generator 由 <a href="https://github.com/ElectronicChartCentre/java-vector-tile">java-vector-tile</a> 提供支持</p>
+</blockquote>
+<h3 id="系统架构概述">系统架构概述<a hidden class="anchor" aria-hidden="true" href="#系统架构概述">#</a></h3>
+<p>下图描述了系统的总体架构。</p>
+<p><img loading="lazy" src="https://zhou-fuyi.github.io/picx-images-hosting/geo_atlas_architecture_overview_diagram.6bgxqkpgf3.svg" alt="geo_atlas_architecture_overview_diagram"  />
+</p>
+<blockquote>
+<p>此处更多的表达了内部结构与层次关系，无关部署</p>
+</blockquote>
+<h3 id="组件概述">组件概述<a hidden class="anchor" aria-hidden="true" href="#组件概述">#</a></h3>
+<ul>
+<li>
+<p>APP</p>
+<ul>
+<li>Geo Atlas Dashboard: 可视化操作界面</li>
+<li>Tiles API Application: 提供矢量切片服务的应用程序(同时支持Dashboard)</li>
+</ul>
+</li>
+<li>
+<p>Boot</p>
+<ul>
+<li>Tiles API Boot Stater: 对Tiles API的快速集成封装, 约定大于配置</li>
+</ul>
+</li>
+<li>
+<p>Component</p>
+<ul>
+<li>Metadata Mgmt: 提供Namespace, Datastore, FeatureLayer元数据管理模块</li>
+<li>Tile Cache: 提供瓦片缓存能力, 目前支持基于内存, 文件系统两种缓存方式, 可任意组合</li>
+<li>OGC APIS: 提供OGC APIs, 目前仅支持Tiles API</li>
+</ul>
+</li>
+<li>
+<p>Library</p>
+<ul>
+<li>Base References: 基础依赖声明</li>
+<li>Pyramid Model: 金字塔模型, 用于构建瓦片金字塔结构索引, 同时提供切片管道</li>
+<li>Tile Generator: 瓦片生成器, 目前仅支持Mapbox Vector Tile Generator</li>
+</ul>
+</li>
+<li>
+<p>External Data Sources</p>
+<ul>
+<li>Config Storage: 用于存储Namespace, Datastore, FeatureLayer等元数据</li>
+<li>Geospatial Data Source: 用于存储矢量数据, 如PostGIS、SQLServer</li>
+</ul>
+</li>
+</ul>
+<h2 id="构建">构建<a hidden class="anchor" aria-hidden="true" href="#构建">#</a></h2>
+<ol>
+<li>
+<p>克隆代码</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-shell" data-lang="shell"><span class="line"><span class="cl">git clone --recursive https://github.com/geoatlas-cloud/geo-atlas.git
+</span></span><span class="line"><span class="cl"><span class="nb">cd</span> geo-atlas/
+</span></span></code></pre></div></li>
+<li>
+<p>要构建应用程序，请从根项目目录运行以下命令, 或者使用IDEA的Maven插件</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-shell" data-lang="shell"><span class="line"><span class="cl">mvn clean install -DskipTests
+</span></span></code></pre></div></li>
+</ol>
+<h3 id="运行调试">运行调试<a hidden class="anchor" aria-hidden="true" href="#运行调试">#</a></h3>
+<ol>
+<li>
+<p>配置环境变量, 默认使用dev环境(当然，你可以直接修改dev.yml文件, 而不是通过环境变量控制)</p>
+<p><img loading="lazy" src="https://zhou-fuyi.github.io/picx-images-hosting/tiles-api-app-dev-env-config.49152iqvfa.webp" alt="tiles-api-app-dev-env-config"  />
+</p>
+</li>
+<li>
+<p>自行用IDEA打开项目，然后运行Application类。</p>
+</li>
+</ol>
+<h2 id="支持">支持<a hidden class="anchor" aria-hidden="true" href="#支持">#</a></h2>
+<ul>
+<li><a href="mailto:thread.zhou@gmail.com">thread.zhou@gmail.com</a></li>
+<li><a href="mailto:thread_zhou@126.com">thread_zhou@126.com</a></li>
+</ul>
+<h2 id="声明与致谢">声明与致谢<a hidden class="anchor" aria-hidden="true" href="#声明与致谢">#</a></h2>
+<ul>
+<li>Geo Atlas现版本参照<a href="https://github.com/geoserver/geoserver">GeoServer</a>应用模式构建，并参考了<a href="https://github.com/geoserver/geoserver">GeoServer</a>以及<a href="https://github.com/geoserver/geoserver-cloud">GeoServer Cloud</a>的实现方式</li>
+<li>Pyramid、IO(in Library)、Tile Cache模块均来自GeoWebCache, 是对其进行了拆解和少量变更</li>
+<li>矢量数据的读取与坐标转换使用GeoTools</li>
+<li>Mapbox Vector Tile Generator由 <a href="https://github.com/ElectronicChartCentre/java-vector-tile">java-vector-tile</a> 提供支持</li>
+</ul>
+
+
+  </div>
+
+  <footer class="post-footer">
+    <ul class="post-tags">
+      <li><a href="https://fuyi-atlas.github.io/tags/geo-atlas/">Geo Atlas</a></li>
+    </ul>
+<nav class="paginav">
+  <a class="prev" href="https://fuyi-atlas.github.io/posts/gis/what-is-tilematrixset/">
+    <span class="title">« Prev</span>
+    <br>
+    <span>再谈TileMatrixSet，二维瓦片金字塔结构的标准定义（上）</span>
+  </a>
+  <a class="next" href="https://fuyi-atlas.github.io/posts/gis/vector-pyramid-technology/">
+    <span class="title">Next »</span>
+    <br>
+    <span>矢量金字塔技术研究</span>
+  </a>
+</nav>
+
+  </footer>
+</article>
+    </main>
+    
+<footer class="footer">
+    <span>&copy; 2024 <a href="https://fuyi-atlas.github.io/">Fuyi Atlas</a></span>
+    <span>
+        Powered by
+        <a href="https://gohugo.io/" rel="noopener noreferrer" target="_blank">Hugo</a> &
+        <a href="https://github.com/adityatelange/hugo-PaperMod/" rel="noopener" target="_blank">PaperMod</a>
+    </span>
+</footer>
+<a href="#top" aria-label="go to top" title="Go to Top (Alt + G)" class="top-link" id="top-link" accesskey="g">
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 12 6" fill="currentColor">
+        <path d="M12 6H0l6-6z" />
+    </svg>
+</a>
+
+<script>
+    let menu = document.getElementById('menu')
+    if (menu) {
+        menu.scrollLeft = localStorage.getItem("menu-scroll-position");
+        menu.onscroll = function () {
+            localStorage.setItem("menu-scroll-position", menu.scrollLeft);
+        }
+    }
+
+    document.querySelectorAll('a[href^="#"]').forEach(anchor => {
+        anchor.addEventListener("click", function (e) {
+            e.preventDefault();
+            var id = this.getAttribute("href").substr(1);
+            if (!window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+                document.querySelector(`[id='${decodeURIComponent(id)}']`).scrollIntoView({
+                    behavior: "smooth"
+                });
+            } else {
+                document.querySelector(`[id='${decodeURIComponent(id)}']`).scrollIntoView();
+            }
+            if (id === "top") {
+                history.replaceState(null, null, " ");
+            } else {
+                history.pushState(null, null, `#${id}`);
+            }
+        });
+    });
+
+</script>
+<script>
+    var mybutton = document.getElementById("top-link");
+    window.onscroll = function () {
+        if (document.body.scrollTop > 800 || document.documentElement.scrollTop > 800) {
+            mybutton.style.visibility = "visible";
+            mybutton.style.opacity = "1";
+        } else {
+            mybutton.style.visibility = "hidden";
+            mybutton.style.opacity = "0";
+        }
+    };
+
+</script>
+<script>
+    document.getElementById("theme-toggle").addEventListener("click", () => {
+        if (document.body.className.includes("dark")) {
+            document.body.classList.remove('dark');
+            localStorage.setItem("pref-theme", 'light');
+        } else {
+            document.body.classList.add('dark');
+            localStorage.setItem("pref-theme", 'dark');
+        }
+    })
+
+</script>
+<script>
+    document.querySelectorAll('pre > code').forEach((codeblock) => {
+        const container = codeblock.parentNode.parentNode;
+
+        const copybutton = document.createElement('button');
+        copybutton.classList.add('copy-code');
+        copybutton.innerHTML = 'copy';
+
+        function copyingDone() {
+            copybutton.innerHTML = 'copied!';
+            setTimeout(() => {
+                copybutton.innerHTML = 'copy';
+            }, 2000);
+        }
+
+        copybutton.addEventListener('click', (cb) => {
+            if ('clipboard' in navigator) {
+                navigator.clipboard.writeText(codeblock.textContent);
+                copyingDone();
+                return;
+            }
+
+            const range = document.createRange();
+            range.selectNodeContents(codeblock);
+            const selection = window.getSelection();
+            selection.removeAllRanges();
+            selection.addRange(range);
+            try {
+                document.execCommand('copy');
+                copyingDone();
+            } catch (e) { };
+            selection.removeRange(range);
+        });
+
+        if (container.classList.contains("highlight")) {
+            container.appendChild(copybutton);
+        } else if (container.parentNode.firstChild == container) {
+            
+        } else if (codeblock.parentNode.parentNode.parentNode.parentNode.parentNode.nodeName == "TABLE") {
+            
+            codeblock.parentNode.parentNode.parentNode.parentNode.parentNode.appendChild(copybutton);
+        } else {
+            
+            codeblock.parentNode.appendChild(copybutton);
+        }
+    });
+</script>
+</body>
+
+</html>

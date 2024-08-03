@@ -1,0 +1,1071 @@
+<!DOCTYPE html>
+<html lang="en" dir="auto">
+
+<head><meta charset="utf-8">
+<meta http-equiv="X-UA-Compatible" content="IE=edge">
+<meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
+<meta name="robots" content="index, follow">
+<title>再谈TileMatrixSet，二维瓦片金字塔结构的标准定义（下） | Fuyi Atlas</title>
+<meta name="keywords" content="tile matrix set, tile matrix, tiling schema, tile set metadata">
+<meta name="description" content="前言 书接上回，本章节为下篇：TileMatrixSet实现及相关计算原理探讨。
+本章节将以TileMatrixSet模型的典型实现，即GeoWebCache中的Gridset作为开端，对OGC中TileMatrxSet模型进行印证。而后对TileMatrixSet相关计算原理进行探讨，并以CGCS2000切片方案为例进行验证。另附带说明TileMatrixSet在Geo Atlas中的实现及应用 🤨。
+Gridset &amp; TileMatrixSet 这里就不再对GeoWebCache做介绍了，直接切入主题。GeoWebCache中的Gridset正是对应着TileMatrixSet模型，我们先来看一下GeoWebCache对于Gridset的相关介绍：
+Gridsets and Gridsubsets Gridsets 和 Gridsubsets 是指 GeoWebCache 所服务的图层的空间参考系统（the spatial reference system）。从本质上来说，正如 Tiles 中所介绍的，GeoWebCache 与参考系统无关。当 GeoWebCache 向 WMS 发出请求时，它使用 Gridsets 和 Gridsubsets 信息将其内部切片索引转换为 WMS 可以理解的空间请求。
+💡 说实话，有时候我觉得老外的啰嗦话挺多的，其实这里就是表达GeoWebCache就是使用 Gridsets 和 Gridsubsets 将瓦片坐标转换为瓦片对应的空间范围的。从其实现来看，此处所述的内部切片索引正是对应着瓦片坐标系。
+下面分别对 Gridset 和 Gridsubset 的构成进行描述，此处引用原文：
+A gridset is a global definition (i.e. not layer-specific) specifying:
+全局定义即对应着通用的切片方案，所以不是特定于层（图层）的。
+A spatial reference system (EPSG code)
+对应着投影坐标系。
+A bounding box describing the extent, typically the maximum extent for the above reference system">
+<meta name="author" content="Fuyi">
+<link rel="canonical" href="https://fuyi-atlas.github.io/posts/gis/what-is-tilematrixset-calculation-principle/">
+<link crossorigin="anonymous" href="/assets/css/stylesheet.a61ecc0df414536d559b3d0ca421e2b1de8f39b8a4910b32fedccecbc2c0d59c.css" integrity="sha256-ph7MDfQUU21Vmz0MpCHisd6PObikkQsy/tzOy8LA1Zw=" rel="preload stylesheet" as="style">
+<link rel="icon" href="https://fuyi-atlas.github.io/favicon.ico">
+<link rel="icon" type="image/png" sizes="16x16" href="https://fuyi-atlas.github.io/favicon-16x16.png">
+<link rel="icon" type="image/png" sizes="32x32" href="https://fuyi-atlas.github.io/favicon-32x32.png">
+<link rel="apple-touch-icon" href="https://fuyi-atlas.github.io/apple-touch-icon.png">
+<link rel="mask-icon" href="https://fuyi-atlas.github.io/safari-pinned-tab.svg">
+<meta name="theme-color" content="#2e2e33">
+<meta name="msapplication-TileColor" content="#2e2e33">
+<link rel="alternate" hreflang="en" href="https://fuyi-atlas.github.io/posts/gis/what-is-tilematrixset-calculation-principle/">
+<noscript>
+    <style>
+        #theme-toggle,
+        .top-link {
+            display: none;
+        }
+
+    </style>
+    <style>
+        @media (prefers-color-scheme: dark) {
+            :root {
+                --theme: rgb(29, 30, 32);
+                --entry: rgb(46, 46, 51);
+                --primary: rgb(218, 218, 219);
+                --secondary: rgb(155, 156, 157);
+                --tertiary: rgb(65, 66, 68);
+                --content: rgb(196, 196, 197);
+                --code-block-bg: rgb(46, 46, 51);
+                --code-bg: rgb(55, 56, 62);
+                --border: rgb(51, 51, 51);
+            }
+
+            .list {
+                background: var(--theme);
+            }
+
+            .list:not(.dark)::-webkit-scrollbar-track {
+                background: 0 0;
+            }
+
+            .list:not(.dark)::-webkit-scrollbar-thumb {
+                border-color: var(--theme);
+            }
+        }
+
+    </style>
+</noscript><meta property="og:title" content="再谈TileMatrixSet，二维瓦片金字塔结构的标准定义（下）" />
+<meta property="og:description" content="前言 书接上回，本章节为下篇：TileMatrixSet实现及相关计算原理探讨。
+本章节将以TileMatrixSet模型的典型实现，即GeoWebCache中的Gridset作为开端，对OGC中TileMatrxSet模型进行印证。而后对TileMatrixSet相关计算原理进行探讨，并以CGCS2000切片方案为例进行验证。另附带说明TileMatrixSet在Geo Atlas中的实现及应用 🤨。
+Gridset &amp; TileMatrixSet 这里就不再对GeoWebCache做介绍了，直接切入主题。GeoWebCache中的Gridset正是对应着TileMatrixSet模型，我们先来看一下GeoWebCache对于Gridset的相关介绍：
+Gridsets and Gridsubsets Gridsets 和 Gridsubsets 是指 GeoWebCache 所服务的图层的空间参考系统（the spatial reference system）。从本质上来说，正如 Tiles 中所介绍的，GeoWebCache 与参考系统无关。当 GeoWebCache 向 WMS 发出请求时，它使用 Gridsets 和 Gridsubsets 信息将其内部切片索引转换为 WMS 可以理解的空间请求。
+💡 说实话，有时候我觉得老外的啰嗦话挺多的，其实这里就是表达GeoWebCache就是使用 Gridsets 和 Gridsubsets 将瓦片坐标转换为瓦片对应的空间范围的。从其实现来看，此处所述的内部切片索引正是对应着瓦片坐标系。
+下面分别对 Gridset 和 Gridsubset 的构成进行描述，此处引用原文：
+A gridset is a global definition (i.e. not layer-specific) specifying:
+全局定义即对应着通用的切片方案，所以不是特定于层（图层）的。
+A spatial reference system (EPSG code)
+对应着投影坐标系。
+A bounding box describing the extent, typically the maximum extent for the above reference system" />
+<meta property="og:type" content="article" />
+<meta property="og:url" content="https://fuyi-atlas.github.io/posts/gis/what-is-tilematrixset-calculation-principle/" /><meta property="article:section" content="posts" />
+<meta property="article:published_time" content="2024-07-11T17:18:03+08:00" />
+<meta property="article:modified_time" content="2024-07-11T17:18:03+08:00" />
+
+<meta name="twitter:card" content="summary"/>
+<meta name="twitter:title" content="再谈TileMatrixSet，二维瓦片金字塔结构的标准定义（下）"/>
+<meta name="twitter:description" content="前言 书接上回，本章节为下篇：TileMatrixSet实现及相关计算原理探讨。
+本章节将以TileMatrixSet模型的典型实现，即GeoWebCache中的Gridset作为开端，对OGC中TileMatrxSet模型进行印证。而后对TileMatrixSet相关计算原理进行探讨，并以CGCS2000切片方案为例进行验证。另附带说明TileMatrixSet在Geo Atlas中的实现及应用 🤨。
+Gridset &amp; TileMatrixSet 这里就不再对GeoWebCache做介绍了，直接切入主题。GeoWebCache中的Gridset正是对应着TileMatrixSet模型，我们先来看一下GeoWebCache对于Gridset的相关介绍：
+Gridsets and Gridsubsets Gridsets 和 Gridsubsets 是指 GeoWebCache 所服务的图层的空间参考系统（the spatial reference system）。从本质上来说，正如 Tiles 中所介绍的，GeoWebCache 与参考系统无关。当 GeoWebCache 向 WMS 发出请求时，它使用 Gridsets 和 Gridsubsets 信息将其内部切片索引转换为 WMS 可以理解的空间请求。
+💡 说实话，有时候我觉得老外的啰嗦话挺多的，其实这里就是表达GeoWebCache就是使用 Gridsets 和 Gridsubsets 将瓦片坐标转换为瓦片对应的空间范围的。从其实现来看，此处所述的内部切片索引正是对应着瓦片坐标系。
+下面分别对 Gridset 和 Gridsubset 的构成进行描述，此处引用原文：
+A gridset is a global definition (i.e. not layer-specific) specifying:
+全局定义即对应着通用的切片方案，所以不是特定于层（图层）的。
+A spatial reference system (EPSG code)
+对应着投影坐标系。
+A bounding box describing the extent, typically the maximum extent for the above reference system"/>
+
+
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "BreadcrumbList",
+  "itemListElement": [
+    {
+      "@type": "ListItem",
+      "position":  1 ,
+      "name": "Posts",
+      "item": "https://fuyi-atlas.github.io/posts/"
+    }, 
+    {
+      "@type": "ListItem",
+      "position":  2 ,
+      "name": "再谈TileMatrixSet，二维瓦片金字塔结构的标准定义（下）",
+      "item": "https://fuyi-atlas.github.io/posts/gis/what-is-tilematrixset-calculation-principle/"
+    }
+  ]
+}
+</script>
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "BlogPosting",
+  "headline": "再谈TileMatrixSet，二维瓦片金字塔结构的标准定义（下）",
+  "name": "再谈TileMatrixSet，二维瓦片金字塔结构的标准定义（下）",
+  "description": "前言 书接上回，本章节为下篇：TileMatrixSet实现及相关计算原理探讨。\n本章节将以TileMatrixSet模型的典型实现，即GeoWebCache中的Gridset作为开端，对OGC中TileMatrxSet模型进行印证。而后对TileMatrixSet相关计算原理进行探讨，并以CGCS2000切片方案为例进行验证。另附带说明TileMatrixSet在Geo Atlas中的实现及应用 🤨。\nGridset \u0026amp; TileMatrixSet 这里就不再对GeoWebCache做介绍了，直接切入主题。GeoWebCache中的Gridset正是对应着TileMatrixSet模型，我们先来看一下GeoWebCache对于Gridset的相关介绍：\nGridsets and Gridsubsets Gridsets 和 Gridsubsets 是指 GeoWebCache 所服务的图层的空间参考系统（the spatial reference system）。从本质上来说，正如 Tiles 中所介绍的，GeoWebCache 与参考系统无关。当 GeoWebCache 向 WMS 发出请求时，它使用 Gridsets 和 Gridsubsets 信息将其内部切片索引转换为 WMS 可以理解的空间请求。\n💡 说实话，有时候我觉得老外的啰嗦话挺多的，其实这里就是表达GeoWebCache就是使用 Gridsets 和 Gridsubsets 将瓦片坐标转换为瓦片对应的空间范围的。从其实现来看，此处所述的内部切片索引正是对应着瓦片坐标系。\n下面分别对 Gridset 和 Gridsubset 的构成进行描述，此处引用原文：\nA gridset is a global definition (i.e. not layer-specific) specifying:\n全局定义即对应着通用的切片方案，所以不是特定于层（图层）的。\nA spatial reference system (EPSG code)\n对应着投影坐标系。\nA bounding box describing the extent, typically the maximum extent for the above reference system",
+  "keywords": [
+    "tile matrix set", "tile matrix", "tiling schema", "tile set metadata"
+  ],
+  "articleBody": "前言 书接上回，本章节为下篇：TileMatrixSet实现及相关计算原理探讨。\n本章节将以TileMatrixSet模型的典型实现，即GeoWebCache中的Gridset作为开端，对OGC中TileMatrxSet模型进行印证。而后对TileMatrixSet相关计算原理进行探讨，并以CGCS2000切片方案为例进行验证。另附带说明TileMatrixSet在Geo Atlas中的实现及应用 🤨。\nGridset \u0026 TileMatrixSet 这里就不再对GeoWebCache做介绍了，直接切入主题。GeoWebCache中的Gridset正是对应着TileMatrixSet模型，我们先来看一下GeoWebCache对于Gridset的相关介绍：\nGridsets and Gridsubsets Gridsets 和 Gridsubsets 是指 GeoWebCache 所服务的图层的空间参考系统（the spatial reference system）。从本质上来说，正如 Tiles 中所介绍的，GeoWebCache 与参考系统无关。当 GeoWebCache 向 WMS 发出请求时，它使用 Gridsets 和 Gridsubsets 信息将其内部切片索引转换为 WMS 可以理解的空间请求。\n💡 说实话，有时候我觉得老外的啰嗦话挺多的，其实这里就是表达GeoWebCache就是使用 Gridsets 和 Gridsubsets 将瓦片坐标转换为瓦片对应的空间范围的。从其实现来看，此处所述的内部切片索引正是对应着瓦片坐标系。\n下面分别对 Gridset 和 Gridsubset 的构成进行描述，此处引用原文：\nA gridset is a global definition (i.e. not layer-specific) specifying:\n全局定义即对应着通用的切片方案，所以不是特定于层（图层）的。\nA spatial reference system (EPSG code)\n对应着投影坐标系。\nA bounding box describing the extent, typically the maximum extent for the above reference system\n描述范围的边界框，通常是上述参考系统的最大范围（也就是说，也可以是你自行定义）\nOne of either a list of scale denominators, resolutions, or zoom levels\n比例分母、分辨率或缩放级别列表之一。（对应着尺度分级）\nThe tile dimensions in pixels (constant for all zoom levels)\n以像素为单位的瓦片尺寸（对于所有缩放级别均保持不变）。\n💡 这也是我在前文说的，目前大部分情况下，瓦片的尺寸基本都使用像素作为单位进行换算。同时，OGC TileMatrixSet中提出的是每个维度（尺度层级）下瓦片大小要一致，但是不同维度的瓦片大小可以不一致。不过在GeoWebCache实现中，要求全维度都使用相同的瓦片大小。当然，这也符合实际中绝大部分的使用情况。\n(Optional) Pixel size (to calculate scales). The default is 0.28mm/pixel, corresponding to 90.71428571428572 DPI.\n（可选）像素大小（用于计算比例）。默认为0.28mm/像素，对应90.71428571428572 DPI。\n💡 这里的Pixel Size对应着Cell Size，其以米为单位。 而0.28mm的来源，前文也曾提到：通常，设备的真实像素尺寸是未知的，0.28 毫米是 2005 年普通显示器的实际像素尺寸。即使当前的显示设备采用小得多的像素尺寸，该值仍被用作参考。 注：自 20 世纪 80 年代以来，Microsoft Windows 操作系统已将其默认的标准显示每英寸像素 (PPI) 设置为 96。该值的结果约为每像素 0.264 mm。该值与本标准中采用的实际 0.28mm 的相似性可能会造成一些混乱。\n对于90.71428571428572数值来源，可继续往下看，切片原理部分会做解释。\nA gridsubset is a layer-specific definition specifying:\ngridsubset 是特定于图层的，这是因为其代表着数据的真实范围。（对应着TileMatrixSet Limits）\n💡 从GeoServer的实现中，图层的BBox是在发布时从数据源处获取的，该图层数据的BBox即为gridsubset的边界范围\nThe gridset for the layer\n其实，Gridset 和 Gridsubset 通常是成对出现的，若有子集则必有原集，但Gridset是可以单独存在的。这两是在同一投影坐标系下，相同尺度分级下、不同BBox（BBox的关系是包含与被包含的关系）的TileMatrixSet实现，只不过 Gridsubset 基本作为辅助元素。\n(Optional) The bounding box for that layer (which must be a subset of the extent of the gridSet)\n（可选）该层的边界框（必须是gridSet范围的子集）\n💡 可选就很灵性，也就是说也可以取默认，也就是取投影坐标系的范围。\n(Optional) A list of zoom levels (which must be a subset of what is defined in the gridSet)\n（可选）缩放级别列表（必须是 gridSet 中定义的子集）\n💡 此处描述的不是可以自定义尺度分级，而是在 GridSet定义的基础上的限定。比如GridSet中定义了0-23级，那么subset只能是0-23的子集，可以限定，但是不可以再行定义。\nBy default, this information is set in geowebcache.xml.\n💡 从上文的描述中，并没有提及切片原点相关的内容。从其实现可知，其默认使用左下角作为切片原点进行实现的，这也是OGC的提倡。那为什么不在此处做出明示呢？估计是遵从约定大于配置原则 也未可知啊！（裘千丈警告😂）\nFrom gridsets to tiles 以下是解释在特定缩放级别下的网格集和子网格集的构建过程，并确定正在请求（可以请求）哪些瓦片。（这句翻译烫嘴🙄）\n对于上述介绍来说，我们现阶段只需要留意以下几个地方就好，像比例和范围计算可暂不用完全理解。\n对于Gridset，给定的边界不一定是Gridset中各格网域的最终边界，应该还需要根据规则进行计算，给定的边界不一定可以正好适合，所以会存在拓展的情况。Gridsubset同理。这也与上文中关于TileMatrixSet域部分对应：每个瓦片矩阵集都有一个可选的近似边界框（即BBox，之所以近似应是因为一般取是最小外接矩形MBR →Minimum Bounding Rectangle，并非完全一致。Maybe🤔），但每个瓦片矩阵都有一个精确的边界框，该边界框是从其他参数间接推导出来的。由于单元格对齐方式不同，每个比例下的瓦片矩阵边界框通常会略有不同（比如4490经纬度投影的0级和1级的边界框就不同）。\n上述内容提到，默认是将边界框对齐到左下角。也就是说，默认情况下，是使用左下角作为切片原点，但是可以通过进行设置是否与右上角对其。\n注：此为GeoWebCache的默认配置（左下角）。 切片原点不同，那么瓦片坐标也不同，但是可以进行相互转换。\nGridsubset就是限制，只有处于Gridsubset范围内的切片，才允许被访问\n💡 对于上述内容中给出的Gridset的BBox与Gridsubset的BBox的数值可不用过多理会，只要明白图示表达的意思就行。\nGridset 实现 这里只贴GridSet和Grid的属性部分代码\nGridSet public class GridSet implements Info { private String name; private SRS srs; // 瓦片宽度，一般为256，像素单位 private int tileWidth; // 瓦片高度，一般为256，像素单位 private int tileHeight; /** * Whether the y-coordinate of {@link #tileOrigin()} is at the top (true) or at the bottom * (false) */ protected boolean yBaseToggle = false; /** * By default the coordinates are {x,y}, this flag reverses the output for WMTS getcapabilities */ private boolean yCoordinateFirst = false; private boolean scaleWarning = false; private double metersPerUnit; private double pixelSize; // 限定的格网边界 private BoundingBox originalExtent; private Grid[] gridLevels; private String description; /** * {@code true} if the resolutions are preserved and the scaleDenominators calculated, {@code * false} if the resolutions are calculated based on the sacale denominators. */ private boolean resolutionsPreserved; } Grid public class Grid implements Serializable, Cloneable { private static final long serialVersionUID = 1L; // 矩阵宽度，即横向的瓦片数量 private long numTilesWide; // 矩阵高度，即纵向的瓦片数量 private long numTilesHigh; // 分辨率 private double resolution; // 比例分母 private double scaleDenom; private String name; } 对比OGC TileMatrixSet UML Model可以发现，GridSet并非完全遵循OGC的标准实现，可以在其基础上进行了一定的修改。当然，这和我目前看的TileMatrixSet标准的版本也有关系（比如说：cornerOfOrigin）。\nGridSet中要求所有层级的瓦片尺寸大小不变，所以将Grid中的tileWidth、tileHeight、pixelSize提升到GridSet中定义。 命名基本不一致 部分简化，又做了一定拓展。比如CRS 变更为SRS，但是兼容别名访问（3857，900913）；比如同时支持比例分母和分辨率来进行尺度分级定义，两者可以相互转换。 💡 其实，我也觉得标准给得相对复杂了些。在各自的场景下可以进行简化，甚至部分内容固定化。\n切片原理 术语 DPI（英语：Dots Per Inch，每英寸点数）：是一个量度单位，用于点阵数字图像，意思是指每一英寸长度中，取样或可显示或输出点的数目。如：打印机输出可达300DPI的分辨率，表示打印机可以每一平方英寸的面积中可以输出300x300＝90000个输出点。\n打印机所设置之分辨率的DPI值越高，印出的图像会越精细。打印机通常可以调校分辨率。例如撞针打印机，分辨率通常是60至90 DPI。喷墨打印机则可达300~720 DPI。激光打印机则有600~1200 DPI。\n一般显示器为96 DPI，印刷所需位图的DPI数则视印刷网线数（lpi）而定。一般150线印刷质量需要350 DPI的位图。而这里的D（dot）就是像素（pixel）。\nPPI：每英寸像素（英语：Pixels Per Inch，缩写：PPI），又被称为像素密度，是一个表示打印图像或显示器单位长度上像素数量的指数 (并非单位面积的像素量)。一般用来计量电脑显示器，电视机和手持电子设备屏幕的精细程度。通常情况下，每英寸像素值越高，屏幕能显示的图像也越精细。5PPI表示每英寸有5个像素，500PPI表示每英寸有500个像素。\n屏幕分辨率：也叫做像素分辨率，常用屏幕上每英寸长度内包含的像素数量来表达，即，Pixel per Inch，因此简写为 PPI（或 DPI），一般地图的默认屏幕分辨率是96。有的地方也用像素大小（pixel size）来描述屏幕的可分辨率，如 WMTS 标准中的0.28mm（标准化渲染像素大小）。\n💡 前文中对于0.28mm的由来做了描述：0.28 毫米是 2005 年普通显示器的实际像素尺寸。其对应的DPI为：25.4/0.28=90.7142857142857\nps：自 20 世纪 80 年代以来，Microsoft Windows 操作系统已将其默认的标准显示每英寸像素 (PPI) 设置为 96。该值（即像素大小）的结果约为每像素 0.264 mm，该值的来源：25.4/96=0.26458333333333334毫米，即约为0.264 mm\n1 英寸 = 2.54 厘米（cm）= 25.4 毫米（mm）\n💡 PPI和DPI都是描述分辨率（屏幕分辨率、空间分辨率是其中的分类）的单位。不过PPI和DPI经常都会出现混用现象。但是他们所用的领域也存在区别。从技术角度说，“像素（pixel）”只存在于电脑显示领域，而“点（dot）”只出现于打印或印刷领域。所以，私以为，除地图打印的场景外，为了在屏幕渲染的地图分辨率应该使用PPI而不是DPI，毕竟此处强调的是屏幕分辨率。🤔\nResolution（地图分辨率）：在 GIS 领域所提到的地图分辨率（Resolution），也称地面分辨率（Ground Resolution）或空间分辨率（Spatial Resolution），表示屏幕上一个像素（pixel）所代表的实际地面距离，也就是一个像素代表多少地图单位（地图单位/像素），地图单位取决于数据所使用的空间参考（是米还是度）。\n💡 即指代地图在图像中每一像素下，表示的地理空间距离（distance per pixel）。可以是每像素多少米（平面），也可以是每像素多少度（当前主要表示经纬度直投的方式下的度量）\n在此处，是一个具体的概念与单位的结合体。本质上就是分辨率，与PPI、DPI并无太大区别，只不过前两者以英寸为单位，以单位内像素数量为度量；此处的dpp以像素为单位，以单位内地理空间距离为度量。都是用于分辨率的表达。\n是不是可以写作：Spatial distance per pixel（sdpp）、Distance per pixel（dpp）、Groud distance per pixel（gdpp） 也未可知🙄\nScale（比例尺）：地图比例尺（scale）是指地图上距离与地面实际距离的比例（也就是地图上1厘米表示实际的地面距离，厘米作为单位）。例如当实际距离为1,000米，而在地图上的距离为1厘米时，则称这一地区的比例尺是1:100,000。一般将比例尺为1:1至1:600000的地图称为大比例尺地图，1:600000至1:2,000,000的地图称为中比例尺地图，1:2000000至1:∞的地图称为小比例尺地图。在计算地图比例尺的时候，通常用到地图分辨率和屏幕分辨率这两个参数。\n比例尺是通过地面分辨率（Resolution）和屏幕分辨率（PPI）由如下公式来定义的：\nResolution：即地图分辨率、地面分辨率，是指一个像素(pixel)所代表的实际地面距离(米，此处需要将单位转换为米进行计算) PPI：屏幕分辨率度量单位，是指屏幕上每英寸长度内包含的像素数量，目前基本上都是96 0.0254(m/inch)是指米与英寸的单位转换 可以用这个公式，对比例尺(scale)和分辨率(resolution)进行换算。\n其中，WMTS 1.0.0标准中没有规定屏幕分辨率（pixel/inch），而是用像元大小（0.28mm=0.00028m）来界定的，二者的换算关系是：\nppi = 1 inch/(pixelSize(m)/0.0254) 所以，对于 WMTS 1.0.0接口（也是GeoWebCache的默认状态），PPI为：\n1 inch/(0.00028m/0.0254(m/inch))=0.0254/0.00028=90.71428571428572≈90.714 💡 如果遇到使用的空间参考单位为度，比如使用经纬度直投时，那么就需要将度转换为米进行计算。该值与OGC中的metersPerUnit对应，计算方式为：赤道处周长/360.0。CGCS2000|WGS84的转换参数为：6378137.0 * 2.0 * Math.PI / 360.0=111319.49079327358 米/度\n此段内容参考自超图的比例尺与分辨率一文，且与地理信息公共服务平台电子地图数据规范中数据中显示比例尺计算公式进行比较，确定一致。\n格网划分 准确说，应该是规则格网划分。也就是在特定的比例（尺度下）对给定的范围，按照指定的瓦片规格进行规则划分，形成平铺网格，即瓦片矩阵（TileMatrix），通常以矩阵的宽和高来表示。而瓦片矩阵集（TileMatrixSet）是由一组以不同比例定义的切片矩阵组成，也就是说，需要先有一组比例集合（尺度分级集合）。\nps: 当然也可以自行从给定的范围进行计算。\n在此，可以直接使用地理信息公共服务平台电子地图数据规范中地图分级或者是天地图的分级，就类似于OGC中提到的Well-Known Scale Set。\n欲要继续进行格网划分，在确定比例分级（尺度分级）的基础上，还需要确定如下几个参数：\ncrs：坐标参考系统，即格网所使用的空间参考 extent：格网范围，通常是所用参考系统的最大范围 PPI：一般默认使用96，不过OGC使用90.71428571428572 Tile Size：一般默认使用256 x 256，像素为单位 CornerOfOrigin：原点角，通常为左上角，TMS惯用的则是左下角 目前国内常用的大范围瓦片矩阵集（通用瓦片矩阵集）有两种，分别是基于Web墨卡托投影、和基于CGCS2000大地坐标系等间隔直投（经纬度直投）。这里，我们先看一下基于Web墨卡托投影的瓦片矩阵集的格网划分过程（也就是TileMatrixSet的构建过程），参数则取上述的默认值或通用值。\n基于Web墨卡托投影的瓦片矩阵集的格网划分 墨卡托投影，是等角正轴圆柱投影，由荷兰地图学家墨卡托(G.Mercator)于1569年创立。假想一个与地轴方向一致的圆柱切或割于地球，按等角条件，将经纬网（地球椭球面上的经纬线）投影于圆柱面上，并沿圆柱母线切开展为平面后，即得本投影。从其定义可知，墨卡托投影具有两种形态，分别是切圆柱投影及割圆柱投影，其中，最早也是最常用的是切圆柱投影（像我们平时所述的墨卡托投影基本上都是指代等角正轴切圆柱投影）。\n💡 墨卡托投影（等角正轴切圆柱投影）以赤道作为标准纬线，以首子午线（本初子午线）为中央经线，其交点为坐标原点。也就是说，投影展开的母线对应椭球面的180°经线（又称为逆子午线或对向子午线（antimeridian），是本初子午线向东或向西180度的经线，既为东经180°，又为西经180°）\nWeb 墨卡托投影是墨卡托投影（等角正轴切圆柱投影）的一种变体，同时也是 web 地图和在线服务的事实标准。对于小比例尺地图，它与标准的墨卡托用的公式一样。但Web墨卡托在所有比例尺下都使用球面公式，但大比例尺的墨卡托地图通常使用投影的椭球面形式。这种差异在全球比例尺下是察觉不到的，但会导致局部地区的地图稍微偏离同一比例尺的真正的椭球面墨卡托地图。 虽然Web墨卡托的公式是墨卡托的球面形式，但地理坐标必须得以WGS 84椭球面基准获得。此差异会导致投影略微不符合正形投影。\n💡 Web墨卡托投影在技术实现上为了简化计算，假设地球是一个球体，而非严格的椭球体。这使得它既不是严格的椭球面投影，也不是严格的球面投影，EPSG的定义说这个投影“使用椭球坐标系的球面演化”。它是建立在地球表面的WGS84椭球面模型定义的地理坐标上的，但在投影的时候却仿佛坐标是定义在球面上的。\nWeb墨卡托投影的范围：[-20037508.3427892, -20037508.3427892, 20037508.3427892, 20037508.3427892]，经投影后所得投影面的投影坐标系如下图所示：\n💡 Web墨卡托投影应是基于墨卡托（等角正轴切圆柱投影）的变体，其同样以赤道为标准纬线，本初子午线为中央经线，两者交点为坐标原点，向东和向北为正。\n此时需要再次放出TileMatrixSet的示意图了，因为要开始进行格网划分，并构建瓦片矩阵集了，有图好理解些。\n再次确定一下参数值：\ncrs：3857|900913 extent：[-20037508.3427892, -20037508.3427892, 20037508.3427892, 20037508.3427892] PPI：96 Tile Size：256 x 256 CornerOfOrigin：左上角 Scale Set：天地图，因上述地图分级缺少矩阵数量，所以改用天地图，不过比例都是一致的。 如上图所示，天地图的分级是从1级开始的，1级以2x2的分布共计4张瓦片。从此处看其缺少0级。我们可以补充一下，并可进行核对。目前地图比例分级通常都采用2的倍率进行切片，也就是说当前级比例是下一级的2倍。第0级用一张瓦片（256x256）表示全部范围，那么在此可以计算：\n// 0级的分辨率为（Extent Width / tile size） (20037508.3427892 * 2)/256=156543.03392804062 // 0级比例尺为（根据上述提供的比例尺计算公式进行计算） 1: (156543.03392804062 * 96/0.0254)=1: 5.916587109091299E8 // 核对一下1级的分辨率和比例尺 156543.03392804062/2=78271.51696402031 5.916587109091299E8/2=2.958293554545649E8 这里可以发现我们算出来的1级的比例尺的最后两位小数与天地图的有点差别（其实使用上应没有什么问题了），原因是因为我们使用的范围其实是相对不精确的。接下来，我们使用WGS84椭球体的赤道圈作为范围来计算（避免小数位保留问题导致计算不一致问题）\n// 0级的分辨率为 (20037508.3427892 * 2)/256=156543.03392804097 // 0级比例尺为 1: (((6378137.0 * 2.0 * Math.PI)/256) * 96/0.0254)=1: 5.916587109091312E8 // 核对一下1级的分辨率和比例尺 156543.03392804097/2=78271.51696402048 5.916587109091312E8/2=2.958293554545656E8 这一次发现，1级的比例尺与天地图的完全一致了。之所以从0级开始说明，这是因为当没有给定比例分级的时候，可以自行基于给定的范围和2的倍率的方式计算分级。当给定分级，则可直接基于分级做后续计算。其中重点，就是计算每一个分级下，矩阵的宽度和高度（以此来作为矩阵描述）。我们在此基于天地图的比例尺分级进行1-5级的瓦片矩阵计算，并进行对比验证（分辨率的计算方式由比例尺计算公式反推）。\n// Extent Width: (6378137.0 * 2.0 * Math.PI)=4.007501668557849E7 // 1级比例尺：2.958293554545656E8 // 1级矩阵 2x2 resolution=(2.958293554545656E8*0.0254)/96=78271.51696402048 // 范围的宽 / 瓦片对应的宽 matrixWidth=4.007501668557849E7/(256*78271.51696402048)=2 // 范围的高(Web墨卡托投影平面是正方形, 所以宽高一致) / 瓦片对应的高 matrixHigh=4.007501668557849E7/(256*78271.51696402048)=2 // 2级比例尺：1.479146777272828E8 // 2级矩阵 4x4 resolution=(1.479146777272828E8*0.0254)/96=39135.75848201024 // 范围的宽 / 瓦片对应的宽 matrixWidth=4.007501668557849E7/(256*39135.75848201024)=4 // 范围的高 / 瓦片对应的高 matrixHigh=4.007501668557849E7/(256*39135.75848201024)=4 // 3级比例尺：7.39573388636414E7 // 3级矩阵 8x8 resolution=(7.39573388636414E7*0.0254)/96=19567.87924100512 // 范围的宽 / 瓦片对应的宽 matrixWidth=4.007501668557849E7/(256*19567.87924100512)=8 // 范围的高 / 瓦片对应的高 matrixHigh=4.007501668557849E7/(256*19567.87924100512)=8 // 4级比例尺：3.69786694318207E7 // 4级矩阵 16x16 resolution=(3.69786694318207E7*0.0254)/96=9783.93962050256 // 范围的宽 / 瓦片对应的宽 matrixWidth=4.007501668557849E7/(256*9783.93962050256)=16 // 范围的高 / 瓦片对应的高 matrixHigh=4.007501668557849E7/(256*9783.93962050256)=16 // 5级比例尺：1.848933471591035E7 // 5级矩阵 32x32 resolution=(1.848933471591035E7*0.0254)/96=4891.96981025128 // 范围的宽 / 瓦片对应的宽 matrixWidth=4.007501668557849E7/(256*4891.96981025128)=32 // 范围的高 / 瓦片对应的高 matrixHigh=4.007501668557849E7/(256*4891.96981025128)=32 经过再次对比，可确定此计算与天地图以及电子地图规范中的地图分级数据一致。且已经完成格网划分动作，是的，其实就是这么简单。确定好参数后，直接进行矩阵构建（格网划分）就好了（矩阵宽，高计算）。\n如果你需要从范围去计算比例分级的话，需要注意的，本次给定的范围是比较特殊的，是相当规整的，因为Web墨卡托的投影面结果是一个正方形的平面区域。所以对于方形瓦片来说，其在正方形的区域下横纵方向的分辨率是一致的。如果给定的区域是长方形或者其他的形状，则可能需要进行一定的范围调整，以保证方形瓦片在横纵方向上的分辨率是统一的，同时矩阵在横纵方向上数量是整数（整除的）。\n基于CGCS2000经纬度投影的瓦片矩阵集的格网划分 经纬度等间隔直投：英文叫法是Platte Carre projection，是等距矩形投影（Equirectangular projection）基准点纬度取0°（赤道）时的特殊情况。它的特点是相同的经纬度间隔在屏幕上的间距相等，没有复杂的坐标变换。我们可简单的理解为，在笛卡尔坐标系中，将赤道作为X轴，子午线（本初子午线）作为Y轴，然后把本来应该在南北两极相交的经线一根一根屡直了，成为了互相平行的经线，而每条纬线的长度也在这个过程中都变为与赤道等长。\n再次确定一下参数值：\ncrs：4490 extent：[-180.0 -90.0, 180.0 90.0] PPI：96 Tile Size：256 x 256 CornerOfOrigin：左上角 Scale Set：天地图。 在这里我们直接进行1-5级的瓦片矩阵计算验证，由于当前是投影使用经纬度单位，需要需要将默认的米转换为度：\n// EPSG_4490_TO_METERS: 6378137.0 * 2.0 * Math.PI / 360.0=111319.49079327358 // 1级比例尺：2.958293554545656E8 // 1级矩阵 2x1 resolution=(2.958293554545656E8*0.0254/111319.49079327358)/96=0.703125 // 范围的宽 / 瓦片对应的宽 matrixWidth=360/(256*0.703125)=2 // 范围的高(Web墨卡托投影平面是正方形, 所以宽高一致) / 瓦片对应的高 matrixHigh=180/(256*0.703125)=1 // 2级比例尺：1.479146777272828E8 // 2级矩阵 4x2 resolution=(1.479146777272828E8*0.0254/111319.49079327358)/96=0.3515625 // 范围的宽 / 瓦片对应的宽 matrixWidth=360/(256*0.3515625)=4 // 范围的高 / 瓦片对应的高 matrixHigh=180/(256*0.3515625)=2 // 3级比例尺：7.39573388636414E7 // 3级矩阵 8x4 resolution=(7.39573388636414E7*0.0254/111319.49079327358)/96=0.17578125 // 范围的宽 / 瓦片对应的宽 matrixWidth=360/(256*0.17578125)=8 // 范围的高 / 瓦片对应的高 matrixHigh=180/(256*0.17578125)=4 // 4级比例尺：3.69786694318207E7 // 4级矩阵 16x8 resolution=(3.69786694318207E7*0.0254/111319.49079327358)/96=0.087890625 // 范围的宽 / 瓦片对应的宽 matrixWidth=360/(256*0.087890625)=16 // 范围的高 / 瓦片对应的高 matrixHigh=180/(256*0.087890625)=8 // 5级比例尺：1.848933471591035E7 // 5级矩阵 32x16 resolution=(1.848933471591035E7*0.0254/111319.49079327358)/96=0.0439453125 // 范围的宽 / 瓦片对应的宽 matrixWidth=360/(256*0.0439453125)=32 // 范围的高 / 瓦片对应的高 matrixHigh=180/(256*0.0439453125)=16 CGCS2000经纬度等间隔直投后所得投影平面就是一个长方形，宽为360°，高为180°。假如此时要以范围进行比例分级计算的话，以256x256瓦片来计算单张瓦片覆盖完整区域的情况（即0级，矩阵1x1的情况）会发现横纵方向上的分辨率不一致，且横向恰好是纵向的2倍。在GeoWebCache中，其默认以小边（即分辨率较低的一边）为主，通过一定规则对范围进行调整（即寻找一个同时适合横纵方向的分辨率，而后基于此计算新的范围）。对于[-180,-90,180,90]这个范围，最终直接以纵向的分辨率（0.703125）为主进行范围调整，因横向分辨率恰好是纵向的2倍，所以最终范围没有发生变化。\nresX=360/256=1.40625 resY=180/256=0.703125 当然，GeoWebCache中不仅只有这一种构建TileMatrixSet的策略，以范围进行构建的更适合没有提供比例分级的情况，其它的还有给定基比例分母（分辨率或比例尺）的方式，或是给定完整的比例分级集合。\n💡 再回顾一下上节附录中提到的4326瓦片矩阵集其0集是2x1，在这个TileMatrixSet中，标识符为“-1”的TileMatrix只有一个图块，有128行留空。因此，许多实施者不想提供这一级别（包括 INSPIRE 技术指南），而是更喜欢从仅用 2 个瓦片（一个用于负经度，一个用于正经度）表示世界的 TileMatrix 开始。\n所以GeoWebCache以范围进行TileMatrixSet构建的程序中，其以小边为主必然会导致如CGCS2000（或WGS84）经纬度直投的方式不存在有单张瓦片覆盖全部区域的层级。\n此段内容较为粗糙，主要以说明其计算原理为主。如果你对此部分内容感兴趣，可以去看一下GeoWebCache中GridSetFactory类的实现，或者是去看Geo Atlas中TileMatrixSetFactory类的实现（我加了部分中文注释 ☺️）\n关于像素大小（Pixel Size）的影响 对于地图分辨率（Resolution）和比例尺（Scale）来说，其实像素大小（pixel size）影响的只有比例尺。所以即使是使用不同的像素大小构建的瓦片矩阵集，只要其地图分辨率是一致的，那么瓦片就可正确的叠加在一起。如下图所示，左侧是我在GeoServer（0.28mm）中配置的CGCS2000经纬度投影的瓦片矩阵集（Geo Atlas中4490同理进行配置），右下则为天地图（0.26458mm）的CGCS2000经纬度投影的瓦片矩阵集。\n坐标转换（tile coordinates ↔ crs） 此处所提坐标转换即为描述如何将瓦片坐标系与其对应的空间坐标系进行相互转换。对于大地坐标系或投影坐标系肯定是熟悉的，这里对瓦片坐标系再次进行说明下。\n上图均为切片原点为左上角的瓦片矩阵集的瓦片坐标系，如果切片原点在左下角，那么tileCol 轴不变，而tileRow轴由下指向上，与当前图示的tileRow轴方向相反。瓦片坐标从0值开始，切片原点处的瓦片坐标为(0, 0)。\n对于两种坐标的转换，其实上文附录部分也有做简要说明，不过仅仅只是伪代码，如今我们就直接看代码吧。\n💡 注：以下所展示内容均指代切片原点在左上角的情况。\nTile Coordinates → Crs BBox 瓦片坐标 tileRow，对应Y tileCol，对应X tileZoom，对应Z 瓦片坐标系转其对应的空间坐标系（即瓦片占据的空间范围）的逻辑其实很好理解。正如格网划分是需要基于某个投影坐标系下进行，划分的同时也是将投影空间转换为瓦片矩阵空间，现在只需要反向推算回去即可。也就是，需要计算出瓦片的左下角和右上角对应的投影坐标。\n需要提供的参数：\n切片原点方位以及投影坐标：如下表示的切片原点是左上角 每个层次的分辨率以及瓦片宽高 public BoundingBox boundsFromIndex(long[] tileIndex) { final int tileZ = (int) tileIndex[2]; TileMatrix matrix = getMatrix(tileZ); long tileX = tileIndex[0]; long tileY; // 计算瓦片在横向上占据了多少地图单位，比如256在当前层级表示多少米或度 double width = matrix.getResolution() * (double) matrix.getTileWidth(); double height = matrix.getResolution() * (double) matrix.getTileHeight(); double[] tileOrigin = this.tileOrigin(); BoundingBox tileBounds; // 此处假定传递的瓦片坐标属于google体系的瓦片坐标系，即原点在左上角 if (CornerOfOrigin.TOP_LEFT.equals(this.cornerOfOrigin)) { tileY = tileIndex[1]; // (minx, miny, maxx, maxy) tileBounds = new BoundingBox(tileOrigin[0] + width * (double) tileX, tileOrigin[1] - height * (double) (tileY + 1L), tileOrigin[0] + width * (double) (tileX + 1L), tileOrigin[1] - height * (double) tileY); } else { throw new IllegalArgumentException(\"Unsupported corner of origin: \" + this.cornerOfOrigin); } return tileBounds; } 💡 值得注意的是，我在此表示BBox用的是左下角和右上角的方式。此种思考方式与切片原点在左上角的瓦片坐标系有些不太统一，总之有点别扭。或许当切片原点在左上角时，使用左上角与右下角表示BBox对于思考更友好些 也未可知啊 🙄\n这难道就是OGC初始提倡使用左下角作为切片原点的理由吗？一方面左下角沿横纵方向都是逐渐增大，更符合人们的思考；另一方面，对于BBox的描述多使用左下角和右上角？🤨\nCrs BBox → Tile Coordinates 上文附录提到的BBOX转瓦片坐标系，是获取到一系列的瓦片坐标系。也就是给定BBox，然后获取到对用的瓦片坐标范围。但是附录中并未提到关于比例层级的内容，不过逻辑是所有层级都是共用的。\n那么在此基于GeoWebCache的实现，提供两类BBox → Tile Coordinates的转换方法。一类是获取与给定范围最接近的瓦片坐标系，另一类则是上文附录提到的一系列的瓦片坐标系。\nClosestIndex 此方法为获取与给定范围最接近的瓦片坐标系，其仅仅适用于将一个正确的瓦片的BBox转换为瓦片坐标，不适用于任意的BBox（即随意构造的BBox）。\n// 首先是找到与给定的BBox最匹配的TileMatrix的索引，它遍历所有层级的瓦片矩阵， // 计算每个层级的分辨率误差，并选择误差最小的层级。同时，它还检查分辨率的一致性， // 确保与之前的最佳分辨率相差不超过10%。 protected long[] closestIndex(BoundingBox tileBounds) throws MatrixMismatchException { double wRes = tileBounds.getWidth() / getMatrix(0).getTileWidth(); // 保存最小的分辨率误差，初始值为最大双精度值（无限大） double bestError = Double.MAX_VALUE; // 保存最佳的瓦片矩阵层级索引，初始值为-1 int bestLevel = -1; // 保存最佳的分辨率，初始值为-1.0 double bestResolution = -1.0; for (int i = 0; i \u003c getNumLevels(); i++) { TileMatrix grid = getMatrix(i); double error = Math.abs(wRes - grid.getResolution()); if (error \u003c bestError) { bestError = error; bestResolution = grid.getResolution(); bestLevel = i; } else { break; } } if (Math.abs(wRes - bestResolution) \u003e (0.1 * wRes)) { throw new ResolutionMismatchException(wRes, bestResolution); } return closestIndex(bestLevel, tileBounds); } protected long[] closestIndex(int level, BoundingBox tileBounds) throws MatrixAlignmentMismatchException { TileMatrix grid = getMatrix(level); double width = grid.getResolution() * grid.getTileWidth(); double height = grid.getResolution() * grid.getTileHeight(); double x = (tileBounds.getMinX() - tileOrigin()[0]) / width; double y = (tileOrigin()[1] - tileBounds.getMaxY()) / height; long posX = Math.round(x); long posY = Math.round(y); if (Math.abs(x - posX) \u003e 0.1 || Math.abs(y - posY) \u003e 0.1) { throw new MatrixAlignmentMismatchException(x, posX, y, posY); } long[] ret = {posX, posY, level}; return ret; } ClosestRectangle 此方法对应上文附录提到的将给定BBox转换为对应的一系列的瓦片坐标系。其同样是先找到与给定的BBox最匹配的TileMatrix的索引，而后计算对应索引层级下BBox对应的瓦片坐标范围。该方法适用于任意范围。\npublic long[] closestRectangle(BoundingBox rectangleBounds) { double rectWidth = rectangleBounds.getWidth(); double rectHeight = rectangleBounds.getHeight(); double bestError = Double.MAX_VALUE; int bestLevel = -1; // Now we loop over the resolutions until for (int i = 0; i \u003c getNumLevels(); i++) { TileMatrix grid = getMatrix(i); double countX = rectWidth / (grid.getResolution() * grid.getTileWidth()); double countY = rectHeight / (grid.getResolution() * grid.getTileHeight()); double error = Math.abs(countX - Math.round(countX)) + Math.abs(countY - Math.round(countY)); if (error \u003c bestError) { bestError = error; bestLevel = i; } else if (error \u003e= bestError) { break; } } return closestRectangle(bestLevel, rectangleBounds); } protected long[] closestRectangle(int level, BoundingBox rectangeBounds) { TileMatrix grid = getMatrix(level); double width = grid.getResolution() * grid.getTileWidth(); double height = grid.getResolution() * grid.getTileHeight(); long minX = (long) Math.floor((rectangeBounds.getMinX() - tileOrigin()[0]) / width); long minY = (long) Math.floor((tileOrigin()[1] - rectangeBounds.getMaxY()) / height); long maxX = (long) Math.ceil(((rectangeBounds.getMaxX() - tileOrigin()[0]) / width)); long maxY = (long) Math.ceil(((tileOrigin()[1] - rectangeBounds.getMinY()) / height)); // We substract one, since that's the tile at that position long[] ret = {minX, minY, maxX - 1, maxY - 1, level}; return ret; } TileMatrixSet in Geo Atlas 其实在Geo Atlas，用于构建矢量切片服务的Java基础库一文中也曾提到，Pyramid、IO(in Library)、Tile Cache模块均来自GeoWebCache，是对其进行了拆解和少量变更。TileMatrixSet就是来自于GeoWebCache的GridSet，在此处对其进行了少量修改：\n切片原点修改为左上角（GeoWebCache默认还是使用左下角作为切片原点，不过也支持配置为左上角）\n将构造GridSet的SRS变更为的CRS（不再割裂）\n默认提供3857\u00264490（其实3857就是900913，只不过GeoTools原生并没有提供900913的坐标系声明；此处4490是遵循天地图CGCS2000经纬度等间隔直投的尺度分级构建，包含0级）\nTileMatrixSet WORLD_EPSG_3857 = TileMatrixSetFactory.createTileMatrixSet( projectedName, CRS.decode(\"EPSG:3857\", true), BoundingBox.WORLD3857, CornerOfOrigin.TOP_LEFT, TileMatrixSetFactory.DEFAULT_LEVELS, null, TileMatrixSetFactory.DEFAULT_PIXEL_SIZE_METER, 256, 256, false); TileMatrixSet WORLD_EPSG_4490 = TileMatrixSetFactory.createTileMatrixSet( projectedName, CRS.decode(\"EPSG:4490\", true), BoundingBox.WORLD4490, CornerOfOrigin.TOP_LEFT, 1.40625d, // 天地图经纬度投影0级的分辨率 TileMatrixSetFactory.DEFAULT_LEVELS, TileMatrixSetFactory.EPSG_4326_TO_METERS, TileMatrixSetFactory.CGCS2000_PIXEL_SIZE_METER, 256, 256, false); 命名变更，将GridSet变更为TileMatrixSet，Grid变更为TileMatrix。理由是：更符合瓦片矩阵的命名，同时OGC中也是如此命名的。\n小结 下篇尝试着对TileMatrixSet的相关计算原理进行探讨说明，文中先后描述了TileMatrixSet在GeoWebCache及Geo Atlas中的实现，同时结合天地图提供的两种投影（Web墨卡托以及CGCS2000经纬度等间隔直投）下的瓦片矩阵集进行计算验证。整体看来，感觉还是有些混乱，计算原理部分的说明不够清晰，未达成心中想要的标准（布局合理、前后连贯、逻辑分明、层层递进、朗朗上口，也未可知啊 😒），再接再厉吧！ 🙄\n个人理解始终有限，如有存在偏颇的方法，还希望大家多多指教 😬🤝！\n参考 电子地图数据规范 再谈TileMatrixSet，二维瓦片金字塔结构的标准定义（上） Gridsets and Gridsubsets 比例尺与分辨率 国内主要地图瓦片坐标系定义及计算原理 切片地图元信息配置说明 Web墨卡托投影 ESRI-墨卡托投影 百度百科-墨卡托投影 未经投影的地理坐标系如何显示为平面地图 ",
+  "wordCount" : "1391",
+  "inLanguage": "en",
+  "datePublished": "2024-07-11T17:18:03+08:00",
+  "dateModified": "2024-07-11T17:18:03+08:00",
+  "author":{
+    "@type": "Person",
+    "name": "Fuyi"
+  },
+  "mainEntityOfPage": {
+    "@type": "WebPage",
+    "@id": "https://fuyi-atlas.github.io/posts/gis/what-is-tilematrixset-calculation-principle/"
+  },
+  "publisher": {
+    "@type": "Organization",
+    "name": "Fuyi Atlas",
+    "logo": {
+      "@type": "ImageObject",
+      "url": "https://fuyi-atlas.github.io/favicon.ico"
+    }
+  }
+}
+</script>
+</head>
+
+<body class="" id="top">
+<script>
+    if (localStorage.getItem("pref-theme") === "dark") {
+        document.body.classList.add('dark');
+    } else if (localStorage.getItem("pref-theme") === "light") {
+        document.body.classList.remove('dark')
+    } else if (window.matchMedia('(prefers-color-scheme: dark)').matches) {
+        document.body.classList.add('dark');
+    }
+
+</script>
+
+<header class="header">
+    <nav class="nav">
+        <div class="logo">
+            <a href="https://fuyi-atlas.github.io/" accesskey="h" title="Fuyi Atlas (Alt + H)">Fuyi Atlas</a>
+            <div class="logo-switches">
+                <button id="theme-toggle" accesskey="t" title="(Alt + T)">
+                    <svg id="moon" xmlns="http://www.w3.org/2000/svg" width="24" height="18" viewBox="0 0 24 24"
+                        fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"
+                        stroke-linejoin="round">
+                        <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path>
+                    </svg>
+                    <svg id="sun" xmlns="http://www.w3.org/2000/svg" width="24" height="18" viewBox="0 0 24 24"
+                        fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"
+                        stroke-linejoin="round">
+                        <circle cx="12" cy="12" r="5"></circle>
+                        <line x1="12" y1="1" x2="12" y2="3"></line>
+                        <line x1="12" y1="21" x2="12" y2="23"></line>
+                        <line x1="4.22" y1="4.22" x2="5.64" y2="5.64"></line>
+                        <line x1="18.36" y1="18.36" x2="19.78" y2="19.78"></line>
+                        <line x1="1" y1="12" x2="3" y2="12"></line>
+                        <line x1="21" y1="12" x2="23" y2="12"></line>
+                        <line x1="4.22" y1="19.78" x2="5.64" y2="18.36"></line>
+                        <line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line>
+                    </svg>
+                </button>
+                <ul class="lang-switch"><li>|</li>
+                    <li>
+                        <a href="https://fuyi-atlas.github.io/zh/" title="Chinese"
+                            aria-label="Chinese">Zh</a>
+                    </li>
+                </ul>
+            </div>
+        </div>
+        <ul id="menu">
+            <li>
+                <a href="https://fuyi-atlas.github.io/archives/" title="Archive">
+                    <span>Archive</span>
+                </a>
+            </li>
+            <li>
+                <a href="https://fuyi-atlas.github.io/search/" title="Search (Alt &#43; /)" accesskey=/>
+                    <span>Search</span>
+                </a>
+            </li>
+            <li>
+                <a href="https://fuyi-atlas.github.io/categories/" title="Categories">
+                    <span>Categories</span>
+                </a>
+            </li>
+            <li>
+                <a href="https://fuyi-atlas.github.io/tags/" title="Tags">
+                    <span>Tags</span>
+                </a>
+            </li>
+        </ul>
+    </nav>
+</header>
+<main class="main">
+
+<article class="post-single">
+  <header class="post-header">
+    <div class="breadcrumbs"><a href="https://fuyi-atlas.github.io/">Home</a>&nbsp;»&nbsp;<a href="https://fuyi-atlas.github.io/posts/">Posts</a></div>
+    <h1 class="post-title entry-hint-parent">
+      再谈TileMatrixSet，二维瓦片金字塔结构的标准定义（下）
+    </h1>
+    <div class="post-meta"><span title='2024-07-11 17:18:03 +0800 CST'>July 11, 2024</span>&nbsp;·&nbsp;7 min&nbsp;·&nbsp;Fuyi
+
+</div>
+  </header> <div class="toc">
+    <details >
+        <summary accesskey="c" title="(Alt + C)">
+            <span class="details">Table of Contents</span>
+        </summary>
+
+        <div class="inner"><ul>
+                <li>
+                    <a href="#%e5%89%8d%e8%a8%80" aria-label="前言">前言</a></li>
+                <li>
+                    <a href="#gridset--tilematrixset" aria-label="Gridset &amp; TileMatrixSet">Gridset &amp; TileMatrixSet</a><ul>
+                        
+                <li>
+                    <a href="#gridsets-and-gridsubsets" aria-label="Gridsets and Gridsubsets">Gridsets and Gridsubsets</a></li>
+                <li>
+                    <a href="#from-gridsets-to-tiles" aria-label="From gridsets to tiles">From gridsets to tiles</a></li>
+                <li>
+                    <a href="#gridset-%e5%ae%9e%e7%8e%b0" aria-label="Gridset 实现">Gridset 实现</a><ul>
+                        
+                <li>
+                    <a href="#gridset" aria-label="GridSet">GridSet</a></li>
+                <li>
+                    <a href="#grid" aria-label="Grid">Grid</a></li></ul>
+                </li></ul>
+                </li>
+                <li>
+                    <a href="#%e5%88%87%e7%89%87%e5%8e%9f%e7%90%86" aria-label="切片原理">切片原理</a><ul>
+                        
+                <li>
+                    <a href="#%e6%9c%af%e8%af%ad" aria-label="术语">术语</a></li>
+                <li>
+                    <a href="#%e6%a0%bc%e7%bd%91%e5%88%92%e5%88%86" aria-label="格网划分">格网划分</a><ul>
+                        
+                <li>
+                    <a href="#%e5%9f%ba%e4%ba%8eweb%e5%a2%a8%e5%8d%a1%e6%89%98%e6%8a%95%e5%bd%b1%e7%9a%84%e7%93%a6%e7%89%87%e7%9f%a9%e9%98%b5%e9%9b%86%e7%9a%84%e6%a0%bc%e7%bd%91%e5%88%92%e5%88%86" aria-label="基于Web墨卡托投影的瓦片矩阵集的格网划分">基于Web墨卡托投影的瓦片矩阵集的格网划分</a></li>
+                <li>
+                    <a href="#%e5%9f%ba%e4%ba%8ecgcs2000%e7%bb%8f%e7%ba%ac%e5%ba%a6%e6%8a%95%e5%bd%b1%e7%9a%84%e7%93%a6%e7%89%87%e7%9f%a9%e9%98%b5%e9%9b%86%e7%9a%84%e6%a0%bc%e7%bd%91%e5%88%92%e5%88%86" aria-label="基于CGCS2000经纬度投影的瓦片矩阵集的格网划分">基于CGCS2000经纬度投影的瓦片矩阵集的格网划分</a></li>
+                <li>
+                    <a href="#%e5%85%b3%e4%ba%8e%e5%83%8f%e7%b4%a0%e5%a4%a7%e5%b0%8fpixel-size%e7%9a%84%e5%bd%b1%e5%93%8d" aria-label="关于像素大小（Pixel Size）的影响">关于像素大小（Pixel Size）的影响</a></li></ul>
+                </li>
+                <li>
+                    <a href="#%e5%9d%90%e6%a0%87%e8%bd%ac%e6%8d%a2tile-coordinates--crs" aria-label="坐标转换（tile coordinates ↔ crs）">坐标转换（tile coordinates ↔ crs）</a><ul>
+                        
+                <li>
+                    <a href="#tile-coordinates--crs-bbox" aria-label="Tile Coordinates → Crs BBox">Tile Coordinates → Crs BBox</a></li>
+                <li>
+                    <a href="#crs-bbox--tile-coordinates" aria-label="Crs BBox → Tile Coordinates">Crs BBox → Tile Coordinates</a><ul>
+                        
+                <li>
+                    <a href="#closestindex" aria-label="ClosestIndex">ClosestIndex</a></li>
+                <li>
+                    <a href="#closestrectangle" aria-label="ClosestRectangle">ClosestRectangle</a></li></ul>
+                </li></ul>
+                </li></ul>
+                </li>
+                <li>
+                    <a href="#tilematrixset-in-geo-atlas" aria-label="TileMatrixSet in Geo Atlas">TileMatrixSet in Geo Atlas</a></li>
+                <li>
+                    <a href="#%e5%b0%8f%e7%bb%93" aria-label="小结">小结</a></li>
+                <li>
+                    <a href="#%e5%8f%82%e8%80%83" aria-label="参考">参考</a>
+                </li>
+            </ul>
+        </div>
+    </details>
+</div>
+
+  <div class="post-content"><h2 id="前言">前言<a hidden class="anchor" aria-hidden="true" href="#前言">#</a></h2>
+<p>书接上回，本章节为下篇：TileMatrixSet实现及相关计算原理探讨。</p>
+<p>本章节将以TileMatrixSet模型的典型实现，即GeoWebCache中的Gridset作为开端，对OGC中TileMatrxSet模型进行印证。而后对TileMatrixSet相关计算原理进行探讨，并以CGCS2000切片方案为例进行验证。另附带说明TileMatrixSet在Geo Atlas中的实现及应用 🤨。</p>
+<h2 id="gridset--tilematrixset">Gridset &amp; TileMatrixSet<a hidden class="anchor" aria-hidden="true" href="#gridset--tilematrixset">#</a></h2>
+<p>这里就不再对GeoWebCache做介绍了，直接切入主题。GeoWebCache中的Gridset正是对应着TileMatrixSet模型，我们先来看一下<a href="https://geowebcache.osgeo.org/docs/current/concepts/gridsets.html">GeoWebCache对于Gridset的相关介绍</a>：</p>
+<h3 id="gridsets-and-gridsubsets"><strong>Gridsets and Gridsubsets</strong><a hidden class="anchor" aria-hidden="true" href="#gridsets-and-gridsubsets">#</a></h3>
+<p>Gridsets 和 Gridsubsets 是指 GeoWebCache 所服务的图层的空间参考系统（the spatial reference system）。从本质上来说，正如 <a href="https://geowebcache.osgeo.org/docs/current/concepts/tiles.html#concepts-tiles">Tiles</a> 中所介绍的，GeoWebCache 与参考系统无关。当 GeoWebCache 向 WMS 发出请求时，它使用 Gridsets 和 Gridsubsets 信息将其内部切片索引转换为 WMS 可以理解的空间请求。</p>
+<blockquote>
+<p>💡 说实话，有时候我觉得老外的啰嗦话挺多的，其实这里就是表达GeoWebCache就是使用 Gridsets 和 Gridsubsets 将瓦片坐标转换为瓦片对应的空间范围的。从其实现来看，此处所述的内部切片索引正是对应着瓦片坐标系。</p>
+</blockquote>
+<p>下面分别对 Gridset 和 Gridsubset 的构成进行描述，此处引用原文：</p>
+<p>A <strong>gridset</strong> is a global definition (i.e. not layer-specific) specifying:</p>
+<p>全局定义即对应着通用的切片方案，所以不是特定于层（图层）的。</p>
+<ul>
+<li>
+<p>A spatial reference system (EPSG code)</p>
+<p>对应着投影坐标系。</p>
+</li>
+<li>
+<p>A bounding box describing the extent, typically the maximum extent for the above reference system</p>
+<p>描述范围的边界框，通常是上述参考系统的最大范围（也就是说，也可以是你自行定义）</p>
+</li>
+<li>
+<p>One of either a list of scale denominators, resolutions, or zoom levels</p>
+<p>比例分母、分辨率或缩放级别列表之一。（对应着尺度分级）</p>
+</li>
+<li>
+<p>The tile dimensions in pixels (constant for all zoom levels)</p>
+<p>以像素为单位的瓦片尺寸（对于所有缩放级别均保持不变）。</p>
+<blockquote>
+<p>💡 这也是我在前文说的，目前大部分情况下，瓦片的尺寸基本都使用像素作为单位进行换算。同时，OGC TileMatrixSet中提出的是每个维度（尺度层级）下瓦片大小要一致，但是不同维度的瓦片大小可以不一致。不过在GeoWebCache实现中，要求全维度都使用相同的瓦片大小。当然，这也符合实际中绝大部分的使用情况。</p>
+</blockquote>
+</li>
+<li>
+<p>(Optional) Pixel size (to calculate scales). The default is 0.28mm/pixel, corresponding to 90.71428571428572 DPI.</p>
+<p>（可选）像素大小（用于计算比例）。默认为0.28mm/像素，对应90.71428571428572 DPI。</p>
+<blockquote>
+<p>💡 这里的Pixel Size对应着Cell Size，其以米为单位。
+而0.28mm的来源，前文也曾提到：通常，设备的真实像素尺寸是未知的，0.28 毫米是 2005 年普通显示器的实际像素尺寸。即使当前的显示设备采用小得多的像素尺寸，该值仍被用作参考。
+注：自 20 世纪 80 年代以来，Microsoft Windows 操作系统已将其默认的标准显示每英寸像素 (PPI) 设置为 96。该值的结果约为每像素 0.264 mm。该值与本标准中采用的实际 0.28mm 的相似性可能会造成一些混乱。</p>
+<p>对于90.71428571428572数值来源，可继续往下看，切片原理部分会做解释。</p>
+</blockquote>
+</li>
+</ul>
+<p>A <strong>gridsubset</strong> is a layer-specific definition specifying:</p>
+<p>gridsubset 是特定于图层的，这是因为其代表着数据的真实范围。（对应着TileMatrixSet Limits）</p>
+<blockquote>
+<p>💡 从GeoServer的实现中，图层的BBox是在发布时从数据源处获取的，该图层数据的BBox即为gridsubset的边界范围</p>
+</blockquote>
+<ul>
+<li>
+<p>The gridset for the layer</p>
+<p>其实，Gridset 和 Gridsubset 通常是成对出现的，若有子集则必有原集，但Gridset是可以单独存在的。这两是在同一投影坐标系下，相同尺度分级下、不同BBox（BBox的关系是包含与被包含的关系）的TileMatrixSet实现，只不过 Gridsubset 基本作为辅助元素。</p>
+</li>
+<li>
+<p>(Optional) The bounding box for that layer (which must be a subset of the extent of the gridSet)</p>
+<p>（可选）该层的边界框（必须是gridSet范围的子集）</p>
+<blockquote>
+<p>💡 可选就很灵性，也就是说也可以取默认，也就是取投影坐标系的范围。</p>
+</blockquote>
+</li>
+<li>
+<p>(Optional) A list of zoom levels (which must be a subset of what is defined in the gridSet)</p>
+<p>（可选）缩放级别列表（必须是 gridSet 中定义的子集）</p>
+<blockquote>
+<p>💡 此处描述的不是可以自定义尺度分级，而是在 GridSet定义的基础上的限定。比如GridSet中定义了0-23级，那么subset只能是0-23的子集，可以限定，但是不可以再行定义。</p>
+</blockquote>
+</li>
+</ul>
+<p>By default, this information is set in <code>geowebcache.xml</code>.</p>
+<blockquote>
+<p>💡 从上文的描述中，并没有提及切片原点相关的内容。从其实现可知，其默认使用左下角作为切片原点进行实现的，这也是OGC的提倡。那为什么不在此处做出明示呢？估计是遵从约定大于配置原则 也未可知啊！（裘千丈警告😂）</p>
+</blockquote>
+<h3 id="from-gridsets-to-tiles"><strong>From gridsets to tiles</strong><a hidden class="anchor" aria-hidden="true" href="#from-gridsets-to-tiles">#</a></h3>
+<p>以下是解释在特定缩放级别下的网格集和子网格集的构建过程，并确定正在请求（可以请求）哪些瓦片。（这句翻译烫嘴🙄）</p>
+<p><img loading="lazy" src="https://zhou-fuyi.github.io/picx-images-hosting/Gridsets-and-Gridsubsets.b8sa7tx1z.webp" alt="Gridsets-and-Gridsubsets"  />
+</p>
+<p>对于上述介绍来说，我们现阶段只需要留意以下几个地方就好，像比例和范围计算可暂不用完全理解。</p>
+<ul>
+<li>
+<p>对于Gridset，给定的边界不一定是Gridset中各格网域的最终边界，应该还需要根据规则进行计算，给定的边界不一定可以正好适合，所以会存在拓展的情况。Gridsubset同理。这也与上文中关于TileMatrixSet域部分对应：每个瓦片矩阵集都有一个可选的近似边界框（即BBox，之所以近似应是因为一般取是最小外接矩形MBR →Minimum Bounding Rectangle，并非完全一致。Maybe🤔），但每个瓦片矩阵都有一个精确的边界框，该边界框是从其他参数间接推导出来的。由于单元格对齐方式不同，每个比例下的瓦片矩阵边界框通常会略有不同（比如4490经纬度投影的0级和1级的边界框就不同）。</p>
+</li>
+<li>
+<p>上述内容提到，默认是将边界框对齐到左下角。也就是说，默认情况下，是使用左下角作为切片原点，但是可以通过<alignTopLeft>进行设置是否与右上角对其。</p>
+<blockquote>
+<p>注：此为GeoWebCache的默认配置（左下角）。
+切片原点不同，那么瓦片坐标也不同，但是可以进行相互转换。</p>
+</blockquote>
+</li>
+<li>
+<p>Gridsubset就是限制，只有处于Gridsubset范围内的切片，才允许被访问</p>
+</li>
+</ul>
+<blockquote>
+<p>💡 对于上述内容中给出的Gridset的BBox与Gridsubset的BBox的数值可不用过多理会，只要明白图示表达的意思就行。</p>
+</blockquote>
+<h3 id="gridset-实现">Gridset 实现<a hidden class="anchor" aria-hidden="true" href="#gridset-实现">#</a></h3>
+<p>这里只贴GridSet和Grid的属性部分代码</p>
+<h4 id="gridset">GridSet<a hidden class="anchor" aria-hidden="true" href="#gridset">#</a></h4>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-java" data-lang="java"><span class="line"><span class="cl"><span class="kd">public</span><span class="w"> </span><span class="kd">class</span> <span class="nc">GridSet</span><span class="w"> </span><span class="kd">implements</span><span class="w"> </span><span class="n">Info</span><span class="w"> </span><span class="p">{</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="kd">private</span><span class="w"> </span><span class="n">String</span><span class="w"> </span><span class="n">name</span><span class="p">;</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="kd">private</span><span class="w"> </span><span class="n">SRS</span><span class="w"> </span><span class="n">srs</span><span class="p">;</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="c1">// 瓦片宽度，一般为256，像素单位</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="kd">private</span><span class="w"> </span><span class="kt">int</span><span class="w"> </span><span class="n">tileWidth</span><span class="p">;</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="c1">// 瓦片高度，一般为256，像素单位</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="kd">private</span><span class="w"> </span><span class="kt">int</span><span class="w"> </span><span class="n">tileHeight</span><span class="p">;</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="cm">/**
+</span></span></span><span class="line"><span class="cl"><span class="cm">     * Whether the y-coordinate of {@link #tileOrigin()} is at the top (true) or at the bottom
+</span></span></span><span class="line"><span class="cl"><span class="cm">     * (false)
+</span></span></span><span class="line"><span class="cl"><span class="cm">     */</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="kd">protected</span><span class="w"> </span><span class="kt">boolean</span><span class="w"> </span><span class="n">yBaseToggle</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="kc">false</span><span class="p">;</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="cm">/**
+</span></span></span><span class="line"><span class="cl"><span class="cm">     * By default the coordinates are {x,y}, this flag reverses the output for WMTS getcapabilities
+</span></span></span><span class="line"><span class="cl"><span class="cm">     */</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="kd">private</span><span class="w"> </span><span class="kt">boolean</span><span class="w"> </span><span class="n">yCoordinateFirst</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="kc">false</span><span class="p">;</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="kd">private</span><span class="w"> </span><span class="kt">boolean</span><span class="w"> </span><span class="n">scaleWarning</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="kc">false</span><span class="p">;</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="kd">private</span><span class="w"> </span><span class="kt">double</span><span class="w"> </span><span class="n">metersPerUnit</span><span class="p">;</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="kd">private</span><span class="w"> </span><span class="kt">double</span><span class="w"> </span><span class="n">pixelSize</span><span class="p">;</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="c1">// 限定的格网边界</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="kd">private</span><span class="w"> </span><span class="n">BoundingBox</span><span class="w"> </span><span class="n">originalExtent</span><span class="p">;</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="kd">private</span><span class="w"> </span><span class="n">Grid</span><span class="o">[]</span><span class="w"> </span><span class="n">gridLevels</span><span class="p">;</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="kd">private</span><span class="w"> </span><span class="n">String</span><span class="w"> </span><span class="n">description</span><span class="p">;</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="cm">/**
+</span></span></span><span class="line"><span class="cl"><span class="cm">     * {@code true} if the resolutions are preserved and the scaleDenominators calculated, {@code
+</span></span></span><span class="line"><span class="cl"><span class="cm">     * false} if the resolutions are calculated based on the sacale denominators.
+</span></span></span><span class="line"><span class="cl"><span class="cm">     */</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="kd">private</span><span class="w"> </span><span class="kt">boolean</span><span class="w"> </span><span class="n">resolutionsPreserved</span><span class="p">;</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="p">}</span><span class="w">
+</span></span></span></code></pre></div><h4 id="grid">Grid<a hidden class="anchor" aria-hidden="true" href="#grid">#</a></h4>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-java" data-lang="java"><span class="line"><span class="cl"><span class="kd">public</span><span class="w"> </span><span class="kd">class</span> <span class="nc">Grid</span><span class="w"> </span><span class="kd">implements</span><span class="w"> </span><span class="n">Serializable</span><span class="p">,</span><span class="w"> </span><span class="n">Cloneable</span><span class="w"> </span><span class="p">{</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="kd">private</span><span class="w"> </span><span class="kd">static</span><span class="w"> </span><span class="kd">final</span><span class="w"> </span><span class="kt">long</span><span class="w"> </span><span class="n">serialVersionUID</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">1L</span><span class="p">;</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="c1">// 矩阵宽度，即横向的瓦片数量</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="kd">private</span><span class="w"> </span><span class="kt">long</span><span class="w"> </span><span class="n">numTilesWide</span><span class="p">;</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="c1">// 矩阵高度，即纵向的瓦片数量</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="kd">private</span><span class="w"> </span><span class="kt">long</span><span class="w"> </span><span class="n">numTilesHigh</span><span class="p">;</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="c1">// 分辨率</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="kd">private</span><span class="w"> </span><span class="kt">double</span><span class="w"> </span><span class="n">resolution</span><span class="p">;</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="c1">// 比例分母</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="kd">private</span><span class="w"> </span><span class="kt">double</span><span class="w"> </span><span class="n">scaleDenom</span><span class="p">;</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="kd">private</span><span class="w"> </span><span class="n">String</span><span class="w"> </span><span class="n">name</span><span class="p">;</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="p">}</span><span class="w">
+</span></span></span></code></pre></div><p>对比<a href="https://docs.ogc.org/is/17-083r4/17-083r4.html#toc16">OGC TileMatrixSet UML Model</a>可以发现，GridSet并非完全遵循OGC的标准实现，可以在其基础上进行了一定的修改。当然，这和我目前看的<a href="https://docs.ogc.org/is/17-083r4/17-083r4.html">TileMatrixSet标准的版本</a>也有关系（比如说：cornerOfOrigin）。</p>
+<ul>
+<li>GridSet中要求所有层级的瓦片尺寸大小不变，所以将Grid中的tileWidth、tileHeight、pixelSize提升到GridSet中定义。</li>
+<li>命名基本不一致</li>
+<li>部分简化，又做了一定拓展。比如CRS 变更为SRS，但是兼容别名访问（3857，900913）；比如同时支持比例分母和分辨率来进行尺度分级定义，两者可以相互转换。</li>
+</ul>
+<blockquote>
+<p>💡 其实，我也觉得标准给得相对复杂了些。在各自的场景下可以进行简化，甚至部分内容固定化。</p>
+</blockquote>
+<h2 id="切片原理">切片原理<a hidden class="anchor" aria-hidden="true" href="#切片原理">#</a></h2>
+<h3 id="术语">术语<a hidden class="anchor" aria-hidden="true" href="#术语">#</a></h3>
+<ul>
+<li>
+<p><strong>DPI</strong>（英语：<strong>D</strong>ots <strong>P</strong>er <strong>I</strong>nch，每英寸点数）：是一个量度单位，用于点阵数字图像，意思是指每一<a href="https://zh.wikipedia.org/wiki/%E8%8B%B1%E5%90%8B">英寸</a>长度中，取样或可显示或输出点的数目。如：打印机输出可达300DPI的分辨率，表示打印机可以每一平方英寸的面积中可以输出300x300＝90000个输出点。</p>
+<p>打印机所设置之<a href="https://zh.wikipedia.org/wiki/%E8%A7%A3%E6%9E%90%E5%BA%A6">分辨率</a>的DPI值越高，印出的图像会越精细。打印机通常可以调校分辨率。例如<a href="https://zh.wikipedia.org/wiki/%E6%92%9E%E9%87%9D%E5%8D%B0%E8%A1%A8%E6%A9%9F">撞针打印机</a>，分辨率通常是60至90 DPI。<a href="https://zh.wikipedia.org/wiki/%E5%99%B4%E5%A2%A8%E5%8D%B0%E8%A1%A8%E6%A9%9F">喷墨打印机</a>则可达300~720 DPI。<a href="https://zh.wikipedia.org/wiki/%E6%BF%80%E5%85%89%E6%89%93%E5%8D%B0%E6%A9%9F">激光打印机</a>则有600~1200 DPI。</p>
+<p>一般显示器为<strong>96</strong> DPI，印刷所需位图的DPI数则视印刷网线数（lpi）而定。一般150线印刷质量需要350 DPI的位图。而这里的D（dot）就是像素（pixel）。</p>
+</li>
+<li>
+<p>PPI：每英寸像素（英语：<strong>P</strong>ixels <strong>P</strong>er <strong>I</strong>nch，<a href="https://zh.wikipedia.org/wiki/%E7%B8%AE%E5%AF%AB">缩写</a>：<strong>PPI</strong>），又被称为像素密度，是一个表示打印图像或显示器单位长度上<a href="https://zh.wikipedia.org/wiki/%E5%83%8F%E7%B4%A0">像素</a>数量的指数 (并非单位面积的像素量)。一般用来计量电脑<a href="https://zh.wikipedia.org/wiki/%E6%98%BE%E7%A4%BA%E5%99%A8">显示器</a>，<a href="https://zh.wikipedia.org/wiki/%E7%94%B5%E8%A7%86%E6%9C%BA">电视机</a>和手持电子设备屏幕的精细程度。通常情况下，每英寸像素值越高，屏幕能显示的图像也越精细。5PPI表示每英寸有5个像素，500PPI表示每英寸有500个像素。</p>
+</li>
+<li>
+<p>屏幕分辨率：也叫做像素分辨率，常用屏幕上每英寸长度内包含的像素数量来表达，即，Pixel per Inch，因此简写为 PPI<del>（或 DPI）</del>，一般地图的默认屏幕分辨率是96。有的地方也用像素大小（pixel size）来描述屏幕的可分辨率，如 WMTS 标准中的0.28mm（标准化渲染像素大小）。</p>
+<blockquote>
+<p>💡 前文中对于0.28mm的由来做了描述：0.28 毫米是 2005 年普通显示器的实际像素尺寸。其对应的DPI为：25.4/0.28=90.7142857142857</p>
+<p>ps：自 20 世纪 80 年代以来，Microsoft Windows 操作系统已将其默认的标准显示每英寸像素 (PPI) 设置为 96。该值（即像素大小）的结果约为每像素 0.264 mm，该值的来源：25.4/96=0.26458333333333334毫米，即约为0.264 mm</p>
+<p>1 英寸 = 2.54 <a href="https://zh.wikipedia.org/wiki/%E5%8E%98%E7%B1%B3">厘米</a>（cm）= 25.4 <a href="https://zh.wikipedia.org/wiki/%E6%AF%AB%E7%B1%B3">毫米</a>（mm）</p>
+</blockquote>
+<blockquote>
+<p>💡 PPI和DPI都是描述<a href="https://zh.wikipedia.org/wiki/%E5%88%86%E8%BE%A8%E7%8E%87">分辨率</a>（屏幕分辨率、空间分辨率是其中的分类）的单位。不过PPI和DPI经常都会出现混用现象。但是他们所用的领域也存在区别。从技术角度说，“像素（pixel）”只存在于电脑显示领域，而“点（dot）”只出现于打印或印刷领域。所以，私以为，除地图打印的场景外，为了在屏幕渲染的地图分辨率应该使用PPI而不是DPI，毕竟此处强调的是屏幕分辨率。🤔</p>
+</blockquote>
+</li>
+<li>
+<p>Resolution（地图分辨率）：在 GIS 领域所提到的地图分辨率（Resolution），也称地面分辨率（Ground Resolution）或空间分辨率（Spatial Resolution），表示屏幕上一个像素（pixel）所代表的实际地面距离，也就是一个像素代表多少地图单位（地图单位/像素），地图单位取决于数据所使用的空间参考（是米还是度）。</p>
+<blockquote>
+<p>💡 即指代地图在图像中每一像素下，表示的地理空间距离（distance per pixel）。可以是每像素多少米（平面），也可以是每像素多少度（当前主要表示经纬度直投的方式下的度量）</p>
+<p>在此处，是一个具体的概念与单位的结合体。本质上就是<a href="https://zh.wikipedia.org/zh-cn/%E5%88%86%E8%BE%A8%E7%8E%87">分辨率</a>，与PPI、DPI并无太大区别，只不过前两者以英寸为单位，以单位内像素数量为度量；此处的dpp以像素为单位，以单位内地理空间距离为度量。都是用于分辨率的表达。</p>
+<p>是不是可以写作：Spatial distance per pixel（sdpp）、Distance per pixel（dpp）、Groud distance per pixel（gdpp） 也未可知🙄</p>
+</blockquote>
+</li>
+<li>
+<p>Scale（比例尺）：地图比例尺（scale）是指地图上距离与地面实际距离的比例（也就是地图上1厘米表示实际的地面距离，厘米作为单位）。例如当实际距离为1,000米，而在地图上的距离为1厘米时，则称这一地区的比例尺是1:100,000。一般将<a href="https://zh.wikipedia.org/wiki/%E6%AF%94%E4%BE%8B%E5%B0%BA">比例尺</a>为1:1至1:600000的地图称为大比例尺地图，1:600000至1:2,000,000的地图称为中比例尺地图，1:2000000至1:∞的地图称为小比例尺地图。在计算地图比例尺的时候，通常用到地图分辨率和屏幕分辨率这两个参数。</p>
+<p>比例尺是通过地面分辨率（Resolution）和屏幕分辨率（PPI）由如下公式来定义的：</p>
+  <div style="display: flex; justify-content: center; align-items: center;">
+      <img src="https://zhou-fuyi.github.io/picx-images-hosting/ScaleFormula.2krstq1jyi.webp" alt="ScaleFormula">
+  </div>
+<ul>
+<li>Resolution：即地图分辨率、地面分辨率，是指一个像素(pixel)所代表的实际地面距离(米，此处需要将单位转换为米进行计算)</li>
+<li>PPI：屏幕分辨率度量单位，是指屏幕上每英寸长度内包含的像素数量，目前基本上都是96</li>
+<li>0.0254(m/inch)是指米与英寸的单位转换</li>
+</ul>
+<p>可以用这个公式，对比例尺(scale)和分辨率(resolution)进行换算。</p>
+<p>其中，WMTS 1.0.0标准中没有规定屏幕分辨率（pixel/inch），而是用像元大小（0.28mm=0.00028m）来界定的，二者的换算关系是：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-text" data-lang="text"><span class="line"><span class="cl">ppi = 1 inch/(pixelSize(m)/0.0254)
+</span></span></code></pre></div><p>所以，对于 WMTS 1.0.0接口（也是GeoWebCache的默认状态），PPI为：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-text" data-lang="text"><span class="line"><span class="cl">1 inch/(0.00028m/0.0254(m/inch))=0.0254/0.00028=90.71428571428572≈90.714
+</span></span></code></pre></div><blockquote>
+<p>💡 如果遇到使用的空间参考单位为度，比如使用经纬度直投时，那么就需要将度转换为米进行计算。该值与OGC中的metersPerUnit对应，计算方式为：赤道处周长/360.0。CGCS2000|WGS84的转换参数为：<code>6378137.0 * 2.0 * Math.PI / 360.0</code>=111319.49079327358 米/度</p>
+</blockquote>
+<p>此段内容参考自超图的<a href="http://support.supermap.com.cn/DataWarehouse/WebDocHelp/iPortal/Appendix/scale.htm">比例尺与分辨率</a>一文，且与<a href="http://jiangsu.tianditu.gov.cn/gaoyou/gytdt/download/%E7%94%B5%E5%AD%90%E5%9C%B0%E5%9B%BE%E6%95%B0%E6%8D%AE%E8%A7%84%E8%8C%83.pdf">地理信息公共服务平台电子地图数据规范</a>中数据中显示比例尺计算公式进行比较，确定一致。</p>
+<p><img loading="lazy" src="https://zhou-fuyi.github.io/picx-images-hosting/web-map-guifan-1.70a7yzdy6g.webp" alt="web-map-guifan-1"  />
+</p>
+<p><img loading="lazy" src="https://zhou-fuyi.github.io/picx-images-hosting/web-map-guifan-2.5j42x89tfr.webp" alt="web-map-guifan-2"  />
+</p>
+</li>
+</ul>
+<h3 id="格网划分">格网划分<a hidden class="anchor" aria-hidden="true" href="#格网划分">#</a></h3>
+<p>准确说，应该是规则格网划分。也就是在特定的比例（尺度下）对给定的范围，按照指定的瓦片规格进行规则划分，形成平铺网格，即瓦片矩阵（TileMatrix），通常以矩阵的宽和高来表示。而瓦片矩阵集（TileMatrixSet）是由一组以不同比例定义的切片矩阵组成，也就是说，需要先有一组比例集合（尺度分级集合）。</p>
+<blockquote>
+<p>ps: 当然也可以自行从给定的范围进行计算。</p>
+</blockquote>
+<p>在此，可以直接使用<a href="http://jiangsu.tianditu.gov.cn/gaoyou/gytdt/download/%E7%94%B5%E5%AD%90%E5%9C%B0%E5%9B%BE%E6%95%B0%E6%8D%AE%E8%A7%84%E8%8C%83.pdf">地理信息公共服务平台电子地图数据规范</a>中地图分级或者是天地图的分级，就类似于OGC中提到的<strong>Well-Known Scale Set。</strong></p>
+<p><img loading="lazy" src="https://zhou-fuyi.github.io/picx-images-hosting/web-map-guifan-3.8dwr30tw1f.webp" alt="web-map-guifan-3"  />
+</p>
+<p>欲要继续进行格网划分，在确定比例分级（尺度分级）的基础上，还需要确定如下几个参数：</p>
+<ul>
+<li>crs：坐标参考系统，即格网所使用的空间参考</li>
+<li>extent：格网范围，通常是所用参考系统的最大范围</li>
+<li>PPI：一般默认使用96，不过OGC使用90.71428571428572</li>
+<li>Tile Size：一般默认使用256 x 256，像素为单位</li>
+<li>CornerOfOrigin：原点角，通常为左上角，TMS惯用的则是左下角</li>
+</ul>
+<p>目前国内常用的大范围瓦片矩阵集（通用瓦片矩阵集）有两种，分别是基于Web墨卡托投影、和基于CGCS2000大地坐标系等间隔直投（经纬度直投）。这里，我们先看一下基于Web墨卡托投影的瓦片矩阵集的格网划分过程（也就是TileMatrixSet的构建过程），参数则取上述的默认值或通用值。</p>
+<h4 id="基于web墨卡托投影的瓦片矩阵集的格网划分"><strong>基于Web墨卡托投影的瓦片矩阵集的格网划分</strong><a hidden class="anchor" aria-hidden="true" href="#基于web墨卡托投影的瓦片矩阵集的格网划分">#</a></h4>
+<p>墨卡托投影，是等角正轴圆柱投影，由荷兰地图学家<a href="https://baike.baidu.com/item/%E5%A2%A8%E5%8D%A1%E6%89%98/94680?fromModule=lemma_inlink">墨卡托</a>(G.Mercator)于1569年创立。假想一个与地轴方向一致的圆柱切或割于地球，按<a href="https://baike.baidu.com/item/%E7%AD%89%E8%A7%92%E6%9D%A1%E4%BB%B6/2200933?fromModule=lemma_inlink">等角条件</a>，将<a href="https://baike.baidu.com/item/%E7%BB%8F%E7%BA%AC%E7%BD%91/8950606?fromModule=lemma_inlink">经纬网</a>（地球椭球面上的经纬线）投影于圆柱面上，并沿圆柱母线切开展为平面后，即得本投影。从其定义可知，墨卡托投影具有两种形态，分别是切圆柱投影及割圆柱投影，其中，最早也是最常用的是切圆柱投影（像我们平时所述的墨卡托投影基本上都是指代等角正轴切圆柱投影）。</p>
+<blockquote>
+<p>💡 墨卡托投影（等角正轴切圆柱投影）以赤道作为标准纬线，以首子午线（本初子午线）为中央经线，其交点为坐标原点。也就是说，投影展开的母线对应椭球面的180°经线（又称为逆子午线或对向子午线（antimeridian），是<a href="https://zh.wikipedia.org/wiki/%E6%9C%AC%E5%88%9D%E5%AD%90%E5%8D%88%E7%B7%9A">本初子午线</a>向东或向西180度的<a href="https://zh.wikipedia.org/wiki/%E7%BB%8F%E7%BA%BF">经线</a>，既为东经180°，又为西经180°）</p>
+</blockquote>
+<p>Web 墨卡托投影是墨卡托投影（等角正轴切圆柱投影）的一种变体，同时也是 web 地图和在线服务的事实标准。对于<a href="https://zh.wikipedia.org/wiki/%E6%AF%94%E4%BE%8B%E5%B0%BA_(%E5%9C%B0%E5%9C%96)">小比例尺地图</a>，它与标准的墨卡托用的公式一样。但Web墨卡托在所有比例尺下都使用球面公式，但大比例尺的墨卡托地图通常使用投影的椭球面形式。这种差异在全球比例尺下是察觉不到的，但会导致局部地区的地图稍微偏离同一比例尺的真正的椭球面墨卡托地图。 虽然Web墨卡托的公式是墨卡托的球面形式，但地理坐标必须得以<a href="https://zh.wikipedia.org/wiki/World_Geodetic_System">WGS 84</a>椭球面基准获得。此差异会导致投影略微不符合<a href="https://zh.wikipedia.org/w/index.php?title=%E6%AD%A3%E5%BD%A2%E6%8A%95%E5%BD%B1&action=edit&redlink=1">正形投影</a>。</p>
+<blockquote>
+<p>💡 Web墨卡托投影在技术实现上为了简化计算，假设地球是一个球体，而非严格的椭球体。这使得它既不是严格的椭球面投影，也不是严格的球面投影，EPSG的定义说这个投影“使用椭球坐标系的球面演化”。它是建立在地球表面的<a href="https://zh.wikipedia.org/wiki/%E4%B8%96%E7%95%8C%E5%A4%A7%E5%9C%B0%E6%B5%8B%E9%87%8F%E7%B3%BB%E7%BB%9F">WGS84</a>椭球面模型定义的地理坐标上的，但在投影的时候却仿佛坐标是定义在球面上的。</p>
+</blockquote>
+<p>Web墨卡托投影的范围：[-20037508.3427892, -20037508.3427892, 20037508.3427892, 20037508.3427892]，经投影后所得投影面的投影坐标系如下图所示：</p>
+<p><img loading="lazy" src="https://zhou-fuyi.github.io/picx-images-hosting/Web%e5%a2%a8%e5%8d%a1%e6%89%98%e6%8a%95%e5%bd%b1%e9%9d%a2%e2%80%94%e5%b9%b3%e9%9d%a2%e5%9d%90%e6%a0%87%e7%b3%bb.1vyj9pk873.webp" alt="Web墨卡托投影面—平面坐标系"  />
+</p>
+<blockquote>
+<p>💡 Web墨卡托投影应是基于墨卡托（等角正轴切圆柱投影）的变体，其同样以赤道为标准纬线，本初子午线为中央经线，两者交点为坐标原点，向东和向北为正。</p>
+</blockquote>
+<p>此时需要再次放出TileMatrixSet的示意图了，因为要开始进行格网划分，并构建瓦片矩阵集了，有图好理解些。</p>
+<p><img loading="lazy" src="https://zhou-fuyi.github.io/picx-images-hosting/ogc-tilematrixset-def.1e8eusx720.webp" alt="ogc-tilematrixset-def"  />
+</p>
+<p>再次确定一下参数值：</p>
+<ul>
+<li>crs：3857|900913</li>
+<li>extent：[-20037508.3427892, -20037508.3427892, 20037508.3427892, 20037508.3427892]</li>
+<li>PPI：96</li>
+<li>Tile Size：256 x 256</li>
+<li>CornerOfOrigin：左上角</li>
+<li>Scale Set：<a href="https://t1.tianditu.gov.cn/cva_w/wmts?SERVICE=WMTS&request=GetCapabilities">天地图</a>，因上述地图分级缺少矩阵数量，所以改用天地图，不过比例都是一致的。</li>
+</ul>
+<p><img loading="lazy" src="https://zhou-fuyi.github.io/picx-images-hosting/tianditu-tilematrixset-web-mercator.7i09nkoqvy.webp" alt="tianditu-tilematrixset-web-mercator"  />
+</p>
+<p>如上图所示，天地图的分级是从1级开始的，1级以2x2的分布共计4张瓦片。从此处看其缺少0级。我们可以补充一下，并可进行核对。目前地图比例分级通常都采用2的倍率进行切片，也就是说当前级比例是下一级的2倍。第0级用一张瓦片（256x256）表示全部范围，那么在此可以计算：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-java" data-lang="java"><span class="line"><span class="cl"><span class="c1">// 0级的分辨率为（Extent Width / tile size）</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="p">(</span><span class="n">20037508</span><span class="p">.</span><span class="na">3427892</span><span class="w"> </span><span class="o">*</span><span class="w"> </span><span class="n">2</span><span class="p">)</span><span class="o">/</span><span class="n">256</span><span class="o">=</span><span class="n">156543</span><span class="p">.</span><span class="na">03392804062</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="c1">// 0级比例尺为（根据上述提供的比例尺计算公式进行计算）</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="nl">1</span><span class="p">:</span><span class="w"> </span><span class="p">(</span><span class="n">156543</span><span class="p">.</span><span class="na">03392804062</span><span class="w"> </span><span class="o">*</span><span class="w"> </span><span class="n">96</span><span class="o">/</span><span class="n">0</span><span class="p">.</span><span class="na">0254</span><span class="p">)</span><span class="o">=</span><span class="n">1</span><span class="p">:</span><span class="w"> </span><span class="n">5</span><span class="p">.</span><span class="na">916587109091299E8</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="c1">// 核对一下1级的分辨率和比例尺</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="n">156543</span><span class="p">.</span><span class="na">03392804062</span><span class="o">/</span><span class="n">2</span><span class="o">=</span><span class="n">78271</span><span class="p">.</span><span class="na">51696402031</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="n">5</span><span class="p">.</span><span class="na">916587109091299E8</span><span class="o">/</span><span class="n">2</span><span class="o">=</span><span class="n">2</span><span class="p">.</span><span class="na">958293554545649E8</span><span class="w">
+</span></span></span></code></pre></div><p>这里可以发现我们算出来的1级的比例尺的最后两位小数与天地图的有点差别（其实使用上应没有什么问题了），原因是因为我们使用的范围其实是相对不精确的。接下来，我们使用WGS84椭球体的赤道圈作为范围来计算（避免小数位保留问题导致计算不一致问题）</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-java" data-lang="java"><span class="line"><span class="cl"><span class="c1">// 0级的分辨率为</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="p">(</span><span class="n">20037508</span><span class="p">.</span><span class="na">3427892</span><span class="w"> </span><span class="o">*</span><span class="w"> </span><span class="n">2</span><span class="p">)</span><span class="o">/</span><span class="n">256</span><span class="o">=</span><span class="n">156543</span><span class="p">.</span><span class="na">03392804097</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="c1">// 0级比例尺为</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="nl">1</span><span class="p">:</span><span class="w"> </span><span class="p">(((</span><span class="n">6378137</span><span class="p">.</span><span class="na">0</span><span class="w"> </span><span class="o">*</span><span class="w"> </span><span class="n">2</span><span class="p">.</span><span class="na">0</span><span class="w"> </span><span class="o">*</span><span class="w"> </span><span class="n">Math</span><span class="p">.</span><span class="na">PI</span><span class="p">)</span><span class="o">/</span><span class="n">256</span><span class="p">)</span><span class="w"> </span><span class="o">*</span><span class="w"> </span><span class="n">96</span><span class="o">/</span><span class="n">0</span><span class="p">.</span><span class="na">0254</span><span class="p">)</span><span class="o">=</span><span class="n">1</span><span class="p">:</span><span class="w"> </span><span class="n">5</span><span class="p">.</span><span class="na">916587109091312E8</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="c1">// 核对一下1级的分辨率和比例尺</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="n">156543</span><span class="p">.</span><span class="na">03392804097</span><span class="o">/</span><span class="n">2</span><span class="o">=</span><span class="n">78271</span><span class="p">.</span><span class="na">51696402048</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="n">5</span><span class="p">.</span><span class="na">916587109091312E8</span><span class="o">/</span><span class="n">2</span><span class="o">=</span><span class="n">2</span><span class="p">.</span><span class="na">958293554545656E8</span><span class="w">
+</span></span></span></code></pre></div><p>这一次发现，1级的比例尺与天地图的完全一致了。之所以从0级开始说明，这是因为当没有给定比例分级的时候，可以自行基于给定的范围和2的倍率的方式计算分级。当给定分级，则可直接基于分级做后续计算。其中重点，就是计算每一个分级下，矩阵的宽度和高度（以此来作为矩阵描述）。我们在此基于天地图的比例尺分级进行1-5级的瓦片矩阵计算，并进行对比验证（分辨率的计算方式由比例尺计算公式反推）。</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-java" data-lang="java"><span class="line"><span class="cl"><span class="c1">// Extent Width: (6378137.0 * 2.0 * Math.PI)=4.007501668557849E7</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="c1">// 1级比例尺：2.958293554545656E8</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="c1">// 1级矩阵 2x2</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="n">resolution</span><span class="o">=</span><span class="p">(</span><span class="n">2</span><span class="p">.</span><span class="na">958293554545656E8</span><span class="o">*</span><span class="n">0</span><span class="p">.</span><span class="na">0254</span><span class="p">)</span><span class="o">/</span><span class="n">96</span><span class="o">=</span><span class="n">78271</span><span class="p">.</span><span class="na">51696402048</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="c1">// 范围的宽 / 瓦片对应的宽</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="n">matrixWidth</span><span class="o">=</span><span class="n">4</span><span class="p">.</span><span class="na">007501668557849E7</span><span class="o">/</span><span class="p">(</span><span class="n">256</span><span class="o">*</span><span class="n">78271</span><span class="p">.</span><span class="na">51696402048</span><span class="p">)</span><span class="o">=</span><span class="n">2</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="c1">// 范围的高(Web墨卡托投影平面是正方形, 所以宽高一致) / 瓦片对应的高</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="n">matrixHigh</span><span class="o">=</span><span class="n">4</span><span class="p">.</span><span class="na">007501668557849E7</span><span class="o">/</span><span class="p">(</span><span class="n">256</span><span class="o">*</span><span class="n">78271</span><span class="p">.</span><span class="na">51696402048</span><span class="p">)</span><span class="o">=</span><span class="n">2</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="c1">// 2级比例尺：1.479146777272828E8</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="c1">// 2级矩阵 4x4</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="n">resolution</span><span class="o">=</span><span class="p">(</span><span class="n">1</span><span class="p">.</span><span class="na">479146777272828E8</span><span class="o">*</span><span class="n">0</span><span class="p">.</span><span class="na">0254</span><span class="p">)</span><span class="o">/</span><span class="n">96</span><span class="o">=</span><span class="n">39135</span><span class="p">.</span><span class="na">75848201024</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="c1">// 范围的宽 / 瓦片对应的宽</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="n">matrixWidth</span><span class="o">=</span><span class="n">4</span><span class="p">.</span><span class="na">007501668557849E7</span><span class="o">/</span><span class="p">(</span><span class="n">256</span><span class="o">*</span><span class="n">39135</span><span class="p">.</span><span class="na">75848201024</span><span class="p">)</span><span class="o">=</span><span class="n">4</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="c1">// 范围的高 / 瓦片对应的高</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="n">matrixHigh</span><span class="o">=</span><span class="n">4</span><span class="p">.</span><span class="na">007501668557849E7</span><span class="o">/</span><span class="p">(</span><span class="n">256</span><span class="o">*</span><span class="n">39135</span><span class="p">.</span><span class="na">75848201024</span><span class="p">)</span><span class="o">=</span><span class="n">4</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="c1">// 3级比例尺：7.39573388636414E7</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="c1">// 3级矩阵 8x8</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="n">resolution</span><span class="o">=</span><span class="p">(</span><span class="n">7</span><span class="p">.</span><span class="na">39573388636414E7</span><span class="o">*</span><span class="n">0</span><span class="p">.</span><span class="na">0254</span><span class="p">)</span><span class="o">/</span><span class="n">96</span><span class="o">=</span><span class="n">19567</span><span class="p">.</span><span class="na">87924100512</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="c1">// 范围的宽 / 瓦片对应的宽</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="n">matrixWidth</span><span class="o">=</span><span class="n">4</span><span class="p">.</span><span class="na">007501668557849E7</span><span class="o">/</span><span class="p">(</span><span class="n">256</span><span class="o">*</span><span class="n">19567</span><span class="p">.</span><span class="na">87924100512</span><span class="p">)</span><span class="o">=</span><span class="n">8</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="c1">// 范围的高 / 瓦片对应的高</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="n">matrixHigh</span><span class="o">=</span><span class="n">4</span><span class="p">.</span><span class="na">007501668557849E7</span><span class="o">/</span><span class="p">(</span><span class="n">256</span><span class="o">*</span><span class="n">19567</span><span class="p">.</span><span class="na">87924100512</span><span class="p">)</span><span class="o">=</span><span class="n">8</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="c1">// 4级比例尺：3.69786694318207E7</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="c1">// 4级矩阵 16x16</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="n">resolution</span><span class="o">=</span><span class="p">(</span><span class="n">3</span><span class="p">.</span><span class="na">69786694318207E7</span><span class="o">*</span><span class="n">0</span><span class="p">.</span><span class="na">0254</span><span class="p">)</span><span class="o">/</span><span class="n">96</span><span class="o">=</span><span class="n">9783</span><span class="p">.</span><span class="na">93962050256</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="c1">// 范围的宽 / 瓦片对应的宽</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="n">matrixWidth</span><span class="o">=</span><span class="n">4</span><span class="p">.</span><span class="na">007501668557849E7</span><span class="o">/</span><span class="p">(</span><span class="n">256</span><span class="o">*</span><span class="n">9783</span><span class="p">.</span><span class="na">93962050256</span><span class="p">)</span><span class="o">=</span><span class="n">16</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="c1">// 范围的高 / 瓦片对应的高</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="n">matrixHigh</span><span class="o">=</span><span class="n">4</span><span class="p">.</span><span class="na">007501668557849E7</span><span class="o">/</span><span class="p">(</span><span class="n">256</span><span class="o">*</span><span class="n">9783</span><span class="p">.</span><span class="na">93962050256</span><span class="p">)</span><span class="o">=</span><span class="n">16</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="c1">// 5级比例尺：1.848933471591035E7</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="c1">// 5级矩阵 32x32</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="n">resolution</span><span class="o">=</span><span class="p">(</span><span class="n">1</span><span class="p">.</span><span class="na">848933471591035E7</span><span class="o">*</span><span class="n">0</span><span class="p">.</span><span class="na">0254</span><span class="p">)</span><span class="o">/</span><span class="n">96</span><span class="o">=</span><span class="n">4891</span><span class="p">.</span><span class="na">96981025128</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="c1">// 范围的宽 / 瓦片对应的宽</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="n">matrixWidth</span><span class="o">=</span><span class="n">4</span><span class="p">.</span><span class="na">007501668557849E7</span><span class="o">/</span><span class="p">(</span><span class="n">256</span><span class="o">*</span><span class="n">4891</span><span class="p">.</span><span class="na">96981025128</span><span class="p">)</span><span class="o">=</span><span class="n">32</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="c1">// 范围的高 / 瓦片对应的高</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="n">matrixHigh</span><span class="o">=</span><span class="n">4</span><span class="p">.</span><span class="na">007501668557849E7</span><span class="o">/</span><span class="p">(</span><span class="n">256</span><span class="o">*</span><span class="n">4891</span><span class="p">.</span><span class="na">96981025128</span><span class="p">)</span><span class="o">=</span><span class="n">32</span><span class="w">
+</span></span></span></code></pre></div><p>经过再次对比，可确定此计算与天地图以及电子地图规范中的地图分级数据一致。且已经完成格网划分动作，是的，其实就是这么简单。确定好参数后，直接进行矩阵构建（格网划分）就好了（矩阵宽，高计算）。</p>
+<p>如果你需要从范围去计算比例分级的话，需要注意的，本次给定的范围是比较特殊的，是相当规整的，因为Web墨卡托的投影面结果是一个正方形的平面区域。所以对于方形瓦片来说，其在正方形的区域下横纵方向的分辨率是一致的。如果给定的区域是长方形或者其他的形状，则可能需要进行一定的范围调整，以保证方形瓦片在横纵方向上的分辨率是统一的，同时矩阵在横纵方向上数量是整数（整除的）。</p>
+<h4 id="基于cgcs2000经纬度投影的瓦片矩阵集的格网划分"><strong>基于CGCS2000经纬度投影的瓦片矩阵集的格网划分</strong><a hidden class="anchor" aria-hidden="true" href="#基于cgcs2000经纬度投影的瓦片矩阵集的格网划分">#</a></h4>
+<p>经纬度等间隔直投：英文叫法是<code>Platte Carre projection</code>，是<a href="https://en.wikipedia.org/wiki/Equirectangular_projection">等距矩形投影</a>（<code>Equirectangular projection</code>）基准点纬度取0°（赤道）时的特殊情况。它的特点是相同的经纬度间隔在屏幕上的间距相等，没有复杂的坐标变换。我们可简单的理解为，在笛卡尔坐标系中，将赤道作为X轴，子午线（本初子午线）作为Y轴，然后把本来应该在南北两极相交的经线一根一根屡直了，成为了互相平行的经线，而每条纬线的长度也在这个过程中都变为与赤道等长。</p>
+<p><img loading="lazy" src="https://zhou-fuyi.github.io/picx-images-hosting/CGCS2000-%e7%bb%8f%e7%ba%ac%e5%ba%a6%e7%9b%b4%e6%8a%95%e5%9d%90%e6%a0%87%e7%b3%bb%e7%a4%ba%e6%84%8f%e5%9b%be.9dcug72glx.webp" alt="CGCS2000-经纬度直投坐标系示意图"  />
+</p>
+<p>再次确定一下参数值：</p>
+<ul>
+<li>crs：4490</li>
+<li>extent：[-180.0 -90.0, 180.0 90.0]</li>
+<li>PPI：96</li>
+<li>Tile Size：256 x 256</li>
+<li>CornerOfOrigin：左上角</li>
+<li>Scale Set：<a href="https://t1.tianditu.gov.cn/cva_c/wmts?SERVICE=WMTS&request=GetCapabilities">天地图</a>。</li>
+</ul>
+<p>在这里我们直接进行1-5级的瓦片矩阵计算验证，由于当前是投影使用经纬度单位，需要需要将默认的米转换为度：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-java" data-lang="java"><span class="line"><span class="cl"><span class="c1">// EPSG_4490_TO_METERS: 6378137.0 * 2.0 * Math.PI / 360.0=111319.49079327358</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="c1">// 1级比例尺：2.958293554545656E8</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="c1">// 1级矩阵 2x1</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="n">resolution</span><span class="o">=</span><span class="p">(</span><span class="n">2</span><span class="p">.</span><span class="na">958293554545656E8</span><span class="o">*</span><span class="n">0</span><span class="p">.</span><span class="na">0254</span><span class="o">/</span><span class="n">111319</span><span class="p">.</span><span class="na">49079327358</span><span class="p">)</span><span class="o">/</span><span class="n">96</span><span class="o">=</span><span class="n">0</span><span class="p">.</span><span class="na">703125</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="c1">// 范围的宽 / 瓦片对应的宽</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="n">matrixWidth</span><span class="o">=</span><span class="n">360</span><span class="o">/</span><span class="p">(</span><span class="n">256</span><span class="o">*</span><span class="n">0</span><span class="p">.</span><span class="na">703125</span><span class="p">)</span><span class="o">=</span><span class="n">2</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="c1">// 范围的高(Web墨卡托投影平面是正方形, 所以宽高一致) / 瓦片对应的高</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="n">matrixHigh</span><span class="o">=</span><span class="n">180</span><span class="o">/</span><span class="p">(</span><span class="n">256</span><span class="o">*</span><span class="n">0</span><span class="p">.</span><span class="na">703125</span><span class="p">)</span><span class="o">=</span><span class="n">1</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="c1">// 2级比例尺：1.479146777272828E8</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="c1">// 2级矩阵 4x2</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="n">resolution</span><span class="o">=</span><span class="p">(</span><span class="n">1</span><span class="p">.</span><span class="na">479146777272828E8</span><span class="o">*</span><span class="n">0</span><span class="p">.</span><span class="na">0254</span><span class="o">/</span><span class="n">111319</span><span class="p">.</span><span class="na">49079327358</span><span class="p">)</span><span class="o">/</span><span class="n">96</span><span class="o">=</span><span class="n">0</span><span class="p">.</span><span class="na">3515625</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="c1">// 范围的宽 / 瓦片对应的宽</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="n">matrixWidth</span><span class="o">=</span><span class="n">360</span><span class="o">/</span><span class="p">(</span><span class="n">256</span><span class="o">*</span><span class="n">0</span><span class="p">.</span><span class="na">3515625</span><span class="p">)</span><span class="o">=</span><span class="n">4</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="c1">// 范围的高 / 瓦片对应的高</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="n">matrixHigh</span><span class="o">=</span><span class="n">180</span><span class="o">/</span><span class="p">(</span><span class="n">256</span><span class="o">*</span><span class="n">0</span><span class="p">.</span><span class="na">3515625</span><span class="p">)</span><span class="o">=</span><span class="n">2</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="c1">// 3级比例尺：7.39573388636414E7</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="c1">// 3级矩阵 8x4</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="n">resolution</span><span class="o">=</span><span class="p">(</span><span class="n">7</span><span class="p">.</span><span class="na">39573388636414E7</span><span class="o">*</span><span class="n">0</span><span class="p">.</span><span class="na">0254</span><span class="o">/</span><span class="n">111319</span><span class="p">.</span><span class="na">49079327358</span><span class="p">)</span><span class="o">/</span><span class="n">96</span><span class="o">=</span><span class="n">0</span><span class="p">.</span><span class="na">17578125</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="c1">// 范围的宽 / 瓦片对应的宽</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="n">matrixWidth</span><span class="o">=</span><span class="n">360</span><span class="o">/</span><span class="p">(</span><span class="n">256</span><span class="o">*</span><span class="n">0</span><span class="p">.</span><span class="na">17578125</span><span class="p">)</span><span class="o">=</span><span class="n">8</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="c1">// 范围的高 / 瓦片对应的高</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="n">matrixHigh</span><span class="o">=</span><span class="n">180</span><span class="o">/</span><span class="p">(</span><span class="n">256</span><span class="o">*</span><span class="n">0</span><span class="p">.</span><span class="na">17578125</span><span class="p">)</span><span class="o">=</span><span class="n">4</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="c1">// 4级比例尺：3.69786694318207E7</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="c1">// 4级矩阵 16x8</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="n">resolution</span><span class="o">=</span><span class="p">(</span><span class="n">3</span><span class="p">.</span><span class="na">69786694318207E7</span><span class="o">*</span><span class="n">0</span><span class="p">.</span><span class="na">0254</span><span class="o">/</span><span class="n">111319</span><span class="p">.</span><span class="na">49079327358</span><span class="p">)</span><span class="o">/</span><span class="n">96</span><span class="o">=</span><span class="n">0</span><span class="p">.</span><span class="na">087890625</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="c1">// 范围的宽 / 瓦片对应的宽</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="n">matrixWidth</span><span class="o">=</span><span class="n">360</span><span class="o">/</span><span class="p">(</span><span class="n">256</span><span class="o">*</span><span class="n">0</span><span class="p">.</span><span class="na">087890625</span><span class="p">)</span><span class="o">=</span><span class="n">16</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="c1">// 范围的高 / 瓦片对应的高</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="n">matrixHigh</span><span class="o">=</span><span class="n">180</span><span class="o">/</span><span class="p">(</span><span class="n">256</span><span class="o">*</span><span class="n">0</span><span class="p">.</span><span class="na">087890625</span><span class="p">)</span><span class="o">=</span><span class="n">8</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="c1">// 5级比例尺：1.848933471591035E7</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="c1">// 5级矩阵 32x16</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="n">resolution</span><span class="o">=</span><span class="p">(</span><span class="n">1</span><span class="p">.</span><span class="na">848933471591035E7</span><span class="o">*</span><span class="n">0</span><span class="p">.</span><span class="na">0254</span><span class="o">/</span><span class="n">111319</span><span class="p">.</span><span class="na">49079327358</span><span class="p">)</span><span class="o">/</span><span class="n">96</span><span class="o">=</span><span class="n">0</span><span class="p">.</span><span class="na">0439453125</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="c1">// 范围的宽 / 瓦片对应的宽</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="n">matrixWidth</span><span class="o">=</span><span class="n">360</span><span class="o">/</span><span class="p">(</span><span class="n">256</span><span class="o">*</span><span class="n">0</span><span class="p">.</span><span class="na">0439453125</span><span class="p">)</span><span class="o">=</span><span class="n">32</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="c1">// 范围的高 / 瓦片对应的高</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="n">matrixHigh</span><span class="o">=</span><span class="n">180</span><span class="o">/</span><span class="p">(</span><span class="n">256</span><span class="o">*</span><span class="n">0</span><span class="p">.</span><span class="na">0439453125</span><span class="p">)</span><span class="o">=</span><span class="n">16</span><span class="w">
+</span></span></span></code></pre></div><p>CGCS2000经纬度等间隔直投后所得投影平面就是一个长方形，宽为360°，高为180°。假如此时要以范围进行比例分级计算的话，以256x256瓦片来计算单张瓦片覆盖完整区域的情况（即0级，矩阵1x1的情况）会发现横纵方向上的分辨率不一致，且横向恰好是纵向的2倍。在GeoWebCache中，其默认以小边（即分辨率较低的一边）为主，通过一定规则对范围进行调整（即寻找一个同时适合横纵方向的分辨率，而后基于此计算新的范围）。对于[-180,-90,180,90]这个范围，最终直接以纵向的分辨率（0.703125）为主进行范围调整，因横向分辨率恰好是纵向的2倍，所以最终范围没有发生变化。</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-java" data-lang="java"><span class="line"><span class="cl"><span class="n">resX</span><span class="o">=</span><span class="n">360</span><span class="o">/</span><span class="n">256</span><span class="o">=</span><span class="n">1</span><span class="p">.</span><span class="na">40625</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="n">resY</span><span class="o">=</span><span class="n">180</span><span class="o">/</span><span class="n">256</span><span class="o">=</span><span class="n">0</span><span class="p">.</span><span class="na">703125</span><span class="w">
+</span></span></span></code></pre></div><p>当然，GeoWebCache中不仅只有这一种构建TileMatrixSet的策略，以范围进行构建的更适合没有提供比例分级的情况，其它的还有给定基比例分母（分辨率或比例尺）的方式，或是给定完整的比例分级集合。</p>
+<blockquote>
+<p>💡 再回顾一下上节附录中提到的4326瓦片矩阵集其0集是2x1，在这个TileMatrixSet中，标识符为“-1”的TileMatrix只有一个图块，有128行留空。因此，许多实施者不想提供这一级别（包括 INSPIRE 技术指南），而是更喜欢从仅用 2 个瓦片（一个用于负经度，一个用于正经度）表示世界的 TileMatrix 开始。</p>
+<p>所以GeoWebCache以范围进行TileMatrixSet构建的程序中，其以小边为主必然会导致如CGCS2000（或WGS84）经纬度直投的方式不存在有单张瓦片覆盖全部区域的层级。</p>
+</blockquote>
+<p>此段内容较为粗糙，主要以说明其计算原理为主。如果你对此部分内容感兴趣，可以去看一下GeoWebCache中<code>GridSetFactory</code>类的实现，或者是去看Geo Atlas中<code>TileMatrixSetFactory</code>类的实现（我加了部分中文注释 ☺️）</p>
+<h4 id="关于像素大小pixel-size的影响">关于像素大小（Pixel Size）的影响<a hidden class="anchor" aria-hidden="true" href="#关于像素大小pixel-size的影响">#</a></h4>
+<p>对于地图分辨率（Resolution）和比例尺（Scale）来说，其实像素大小（pixel size）影响的只有比例尺。所以即使是使用不同的像素大小构建的瓦片矩阵集，只要其地图分辨率是一致的，那么瓦片就可正确的叠加在一起。如下图所示，左侧是我在GeoServer（0.28mm）中配置的CGCS2000经纬度投影的瓦片矩阵集（Geo Atlas中4490同理进行配置），右下则为天地图（0.26458mm）的CGCS2000经纬度投影的瓦片矩阵集。</p>
+<p><img loading="lazy" src="https://zhou-fuyi.github.io/picx-images-hosting/pixel-size-with-scale.4ckrouse2m.webp" alt="pixel-size-with-scale"  />
+</p>
+<h3 id="坐标转换tile-coordinates--crs">坐标转换（tile coordinates ↔ crs）<a hidden class="anchor" aria-hidden="true" href="#坐标转换tile-coordinates--crs">#</a></h3>
+<p>此处所提坐标转换即为描述如何将瓦片坐标系与其对应的空间坐标系进行相互转换。对于大地坐标系或投影坐标系肯定是熟悉的，这里对瓦片坐标系再次进行说明下。</p>
+<p><img loading="lazy" src="https://zhou-fuyi.github.io/picx-images-hosting/tile-coordinates.7p3h7t2z88.webp" alt="tile-coordinates"  />
+</p>
+<p><img loading="lazy" src="https://zhou-fuyi.github.io/picx-images-hosting/tile-space-2.wiflbpr4a.webp" alt="tile-space-2"  />
+</p>
+<p>上图均为切片原点为左上角的瓦片矩阵集的瓦片坐标系，如果切片原点在左下角，那么tileCol 轴不变，而tileRow轴由下指向上，与当前图示的tileRow轴方向相反。瓦片坐标从0值开始，切片原点处的瓦片坐标为(0, 0)。</p>
+<p>对于两种坐标的转换，其实上文附录部分也有做简要说明，不过仅仅只是伪代码，如今我们就直接看代码吧。</p>
+<blockquote>
+<p>💡 注：以下所展示内容均指代切片原点在左上角的情况。</p>
+</blockquote>
+<h4 id="tile-coordinates--crs-bbox"><strong>Tile Coordinates → Crs BBox</strong><a hidden class="anchor" aria-hidden="true" href="#tile-coordinates--crs-bbox">#</a></h4>
+<ul>
+<li>瓦片坐标
+<ul>
+<li>tileRow，对应Y</li>
+<li>tileCol，对应X</li>
+<li>tileZoom，对应Z</li>
+</ul>
+</li>
+</ul>
+<p>瓦片坐标系转其对应的空间坐标系（即瓦片占据的空间范围）的逻辑其实很好理解。正如格网划分是需要基于某个投影坐标系下进行，划分的同时也是将投影空间转换为瓦片矩阵空间，现在只需要反向推算回去即可。也就是，需要计算出瓦片的左下角和右上角对应的投影坐标。</p>
+<p>需要提供的参数：</p>
+<ul>
+<li>切片原点方位以及投影坐标：如下表示的切片原点是左上角</li>
+<li>每个层次的分辨率以及瓦片宽高</li>
+</ul>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-java" data-lang="java"><span class="line"><span class="cl"><span class="w">    </span><span class="kd">public</span><span class="w"> </span><span class="n">BoundingBox</span><span class="w"> </span><span class="nf">boundsFromIndex</span><span class="p">(</span><span class="kt">long</span><span class="o">[]</span><span class="w"> </span><span class="n">tileIndex</span><span class="p">)</span><span class="w"> </span><span class="p">{</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">        </span><span class="kd">final</span><span class="w"> </span><span class="kt">int</span><span class="w"> </span><span class="n">tileZ</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">(</span><span class="kt">int</span><span class="p">)</span><span class="w"> </span><span class="n">tileIndex</span><span class="o">[</span><span class="n">2</span><span class="o">]</span><span class="p">;</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">        </span><span class="n">TileMatrix</span><span class="w"> </span><span class="n">matrix</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">getMatrix</span><span class="p">(</span><span class="n">tileZ</span><span class="p">);</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">        </span><span class="kt">long</span><span class="w"> </span><span class="n">tileX</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">tileIndex</span><span class="o">[</span><span class="n">0</span><span class="o">]</span><span class="p">;</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">        </span><span class="kt">long</span><span class="w"> </span><span class="n">tileY</span><span class="p">;</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">        </span><span class="c1">// 计算瓦片在横向上占据了多少地图单位，比如256在当前层级表示多少米或度</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">        </span><span class="kt">double</span><span class="w"> </span><span class="n">width</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">matrix</span><span class="p">.</span><span class="na">getResolution</span><span class="p">()</span><span class="w"> </span><span class="o">*</span><span class="w"> </span><span class="p">(</span><span class="kt">double</span><span class="p">)</span><span class="w"> </span><span class="n">matrix</span><span class="p">.</span><span class="na">getTileWidth</span><span class="p">();</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">        </span><span class="kt">double</span><span class="w"> </span><span class="n">height</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">matrix</span><span class="p">.</span><span class="na">getResolution</span><span class="p">()</span><span class="w"> </span><span class="o">*</span><span class="w"> </span><span class="p">(</span><span class="kt">double</span><span class="p">)</span><span class="w"> </span><span class="n">matrix</span><span class="p">.</span><span class="na">getTileHeight</span><span class="p">();</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">        </span><span class="kt">double</span><span class="o">[]</span><span class="w"> </span><span class="n">tileOrigin</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="k">this</span><span class="p">.</span><span class="na">tileOrigin</span><span class="p">();</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">        </span><span class="n">BoundingBox</span><span class="w"> </span><span class="n">tileBounds</span><span class="p">;</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">        </span><span class="c1">// 此处假定传递的瓦片坐标属于google体系的瓦片坐标系，即原点在左上角</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">        </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">CornerOfOrigin</span><span class="p">.</span><span class="na">TOP_LEFT</span><span class="p">.</span><span class="na">equals</span><span class="p">(</span><span class="k">this</span><span class="p">.</span><span class="na">cornerOfOrigin</span><span class="p">))</span><span class="w"> </span><span class="p">{</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">            </span><span class="n">tileY</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">tileIndex</span><span class="o">[</span><span class="n">1</span><span class="o">]</span><span class="p">;</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">            </span><span class="c1">// (minx, miny, maxx, maxy)</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">            </span><span class="n">tileBounds</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="k">new</span><span class="w"> </span><span class="n">BoundingBox</span><span class="p">(</span><span class="n">tileOrigin</span><span class="o">[</span><span class="n">0</span><span class="o">]</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="n">width</span><span class="w"> </span><span class="o">*</span><span class="w"> </span><span class="p">(</span><span class="kt">double</span><span class="p">)</span><span class="w"> </span><span class="n">tileX</span><span class="p">,</span><span class="w"> 
+</span></span></span><span class="line"><span class="cl"><span class="w">                    </span><span class="n">tileOrigin</span><span class="o">[</span><span class="n">1</span><span class="o">]</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="n">height</span><span class="w"> </span><span class="o">*</span><span class="w"> </span><span class="p">(</span><span class="kt">double</span><span class="p">)</span><span class="w"> </span><span class="p">(</span><span class="n">tileY</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="n">1L</span><span class="p">),</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">                    </span><span class="n">tileOrigin</span><span class="o">[</span><span class="n">0</span><span class="o">]</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="n">width</span><span class="w"> </span><span class="o">*</span><span class="w"> </span><span class="p">(</span><span class="kt">double</span><span class="p">)</span><span class="w"> </span><span class="p">(</span><span class="n">tileX</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="n">1L</span><span class="p">),</span><span class="w"> 
+</span></span></span><span class="line"><span class="cl"><span class="w">                    </span><span class="n">tileOrigin</span><span class="o">[</span><span class="n">1</span><span class="o">]</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="n">height</span><span class="w"> </span><span class="o">*</span><span class="w"> </span><span class="p">(</span><span class="kt">double</span><span class="p">)</span><span class="w"> </span><span class="n">tileY</span><span class="p">);</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">        </span><span class="p">}</span><span class="w"> </span><span class="k">else</span><span class="w"> </span><span class="p">{</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">            </span><span class="k">throw</span><span class="w"> </span><span class="k">new</span><span class="w"> </span><span class="n">IllegalArgumentException</span><span class="p">(</span><span class="s">&#34;Unsupported corner of origin: &#34;</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="k">this</span><span class="p">.</span><span class="na">cornerOfOrigin</span><span class="p">);</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">        </span><span class="p">}</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">        </span><span class="k">return</span><span class="w"> </span><span class="n">tileBounds</span><span class="p">;</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="p">}</span><span class="w">
+</span></span></span></code></pre></div><blockquote>
+<p>💡 值得注意的是，我在此表示BBox用的是左下角和右上角的方式。此种思考方式与切片原点在左上角的瓦片坐标系有些不太统一，总之有点别扭。或许当切片原点在左上角时，使用左上角与右下角表示BBox对于思考更友好些 也未可知啊 🙄</p>
+<p>这难道就是OGC初始提倡使用左下角作为切片原点的理由吗？一方面左下角沿横纵方向都是逐渐增大，更符合人们的思考；另一方面，对于BBox的描述多使用左下角和右上角？🤨</p>
+</blockquote>
+<h4 id="crs-bbox--tile-coordinates"><strong>Crs BBox → Tile Coordinates</strong><a hidden class="anchor" aria-hidden="true" href="#crs-bbox--tile-coordinates">#</a></h4>
+<p>上文附录提到的BBOX转瓦片坐标系，是获取到一系列的瓦片坐标系。也就是给定BBox，然后获取到对用的瓦片坐标范围。但是附录中并未提到关于比例层级的内容，不过逻辑是所有层级都是共用的。</p>
+<p>那么在此基于GeoWebCache的实现，提供两类BBox → Tile Coordinates的转换方法。一类是获取与给定范围最接近的瓦片坐标系，另一类则是上文附录提到的一系列的瓦片坐标系。</p>
+<h5 id="closestindex"><strong>ClosestIndex</strong><a hidden class="anchor" aria-hidden="true" href="#closestindex">#</a></h5>
+<p>此方法为获取与给定范围最接近的瓦片坐标系，其仅仅适用于将一个正确的瓦片的BBox转换为瓦片坐标，不适用于任意的BBox（即随意构造的BBox）。</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-java" data-lang="java"><span class="line"><span class="cl"><span class="w">    </span><span class="c1">// 首先是找到与给定的BBox最匹配的TileMatrix的索引，它遍历所有层级的瓦片矩阵，</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="c1">// 计算每个层级的分辨率误差，并选择误差最小的层级。同时，它还检查分辨率的一致性，</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="c1">// 确保与之前的最佳分辨率相差不超过10%。</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="kd">protected</span><span class="w"> </span><span class="kt">long</span><span class="o">[]</span><span class="w"> </span><span class="nf">closestIndex</span><span class="p">(</span><span class="n">BoundingBox</span><span class="w"> </span><span class="n">tileBounds</span><span class="p">)</span><span class="w"> </span><span class="kd">throws</span><span class="w"> </span><span class="n">MatrixMismatchException</span><span class="w"> </span><span class="p">{</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">        </span><span class="kt">double</span><span class="w"> </span><span class="n">wRes</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">tileBounds</span><span class="p">.</span><span class="na">getWidth</span><span class="p">()</span><span class="w"> </span><span class="o">/</span><span class="w"> </span><span class="n">getMatrix</span><span class="p">(</span><span class="n">0</span><span class="p">).</span><span class="na">getTileWidth</span><span class="p">();</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">        </span><span class="c1">// 保存最小的分辨率误差，初始值为最大双精度值（无限大）</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">        </span><span class="kt">double</span><span class="w"> </span><span class="n">bestError</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">Double</span><span class="p">.</span><span class="na">MAX_VALUE</span><span class="p">;</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">        </span><span class="c1">// 保存最佳的瓦片矩阵层级索引，初始值为-1</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">        </span><span class="kt">int</span><span class="w"> </span><span class="n">bestLevel</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="o">-</span><span class="n">1</span><span class="p">;</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">        </span><span class="c1">// 保存最佳的分辨率，初始值为-1.0</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">        </span><span class="kt">double</span><span class="w"> </span><span class="n">bestResolution</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="o">-</span><span class="n">1</span><span class="p">.</span><span class="na">0</span><span class="p">;</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">        </span><span class="k">for</span><span class="w"> </span><span class="p">(</span><span class="kt">int</span><span class="w"> </span><span class="n">i</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">0</span><span class="p">;</span><span class="w"> </span><span class="n">i</span><span class="w"> </span><span class="o">&lt;</span><span class="w"> </span><span class="n">getNumLevels</span><span class="p">();</span><span class="w"> </span><span class="n">i</span><span class="o">++</span><span class="p">)</span><span class="w"> </span><span class="p">{</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">            </span><span class="n">TileMatrix</span><span class="w"> </span><span class="n">grid</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">getMatrix</span><span class="p">(</span><span class="n">i</span><span class="p">);</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">            </span><span class="kt">double</span><span class="w"> </span><span class="n">error</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">Math</span><span class="p">.</span><span class="na">abs</span><span class="p">(</span><span class="n">wRes</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="n">grid</span><span class="p">.</span><span class="na">getResolution</span><span class="p">());</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">            </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">error</span><span class="w"> </span><span class="o">&lt;</span><span class="w"> </span><span class="n">bestError</span><span class="p">)</span><span class="w"> </span><span class="p">{</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">                </span><span class="n">bestError</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">error</span><span class="p">;</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">                </span><span class="n">bestResolution</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">grid</span><span class="p">.</span><span class="na">getResolution</span><span class="p">();</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">                </span><span class="n">bestLevel</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">i</span><span class="p">;</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">            </span><span class="p">}</span><span class="w"> </span><span class="k">else</span><span class="w"> </span><span class="p">{</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">                </span><span class="k">break</span><span class="p">;</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">            </span><span class="p">}</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">        </span><span class="p">}</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">        </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">Math</span><span class="p">.</span><span class="na">abs</span><span class="p">(</span><span class="n">wRes</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="n">bestResolution</span><span class="p">)</span><span class="w"> </span><span class="o">&gt;</span><span class="w"> </span><span class="p">(</span><span class="n">0</span><span class="p">.</span><span class="na">1</span><span class="w"> </span><span class="o">*</span><span class="w"> </span><span class="n">wRes</span><span class="p">))</span><span class="w"> </span><span class="p">{</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">            </span><span class="k">throw</span><span class="w"> </span><span class="k">new</span><span class="w"> </span><span class="n">ResolutionMismatchException</span><span class="p">(</span><span class="n">wRes</span><span class="p">,</span><span class="w"> </span><span class="n">bestResolution</span><span class="p">);</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">        </span><span class="p">}</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">        </span><span class="k">return</span><span class="w"> </span><span class="n">closestIndex</span><span class="p">(</span><span class="n">bestLevel</span><span class="p">,</span><span class="w"> </span><span class="n">tileBounds</span><span class="p">);</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="p">}</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="kd">protected</span><span class="w"> </span><span class="kt">long</span><span class="o">[]</span><span class="w"> </span><span class="nf">closestIndex</span><span class="p">(</span><span class="kt">int</span><span class="w"> </span><span class="n">level</span><span class="p">,</span><span class="w"> </span><span class="n">BoundingBox</span><span class="w"> </span><span class="n">tileBounds</span><span class="p">)</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">            </span><span class="kd">throws</span><span class="w"> </span><span class="n">MatrixAlignmentMismatchException</span><span class="w"> </span><span class="p">{</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">        </span><span class="n">TileMatrix</span><span class="w"> </span><span class="n">grid</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">getMatrix</span><span class="p">(</span><span class="n">level</span><span class="p">);</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">        </span><span class="kt">double</span><span class="w"> </span><span class="n">width</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">grid</span><span class="p">.</span><span class="na">getResolution</span><span class="p">()</span><span class="w"> </span><span class="o">*</span><span class="w"> </span><span class="n">grid</span><span class="p">.</span><span class="na">getTileWidth</span><span class="p">();</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">        </span><span class="kt">double</span><span class="w"> </span><span class="n">height</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">grid</span><span class="p">.</span><span class="na">getResolution</span><span class="p">()</span><span class="w"> </span><span class="o">*</span><span class="w"> </span><span class="n">grid</span><span class="p">.</span><span class="na">getTileHeight</span><span class="p">();</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">        </span><span class="kt">double</span><span class="w"> </span><span class="n">x</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">(</span><span class="n">tileBounds</span><span class="p">.</span><span class="na">getMinX</span><span class="p">()</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="n">tileOrigin</span><span class="p">()</span><span class="o">[</span><span class="n">0</span><span class="o">]</span><span class="p">)</span><span class="w"> </span><span class="o">/</span><span class="w"> </span><span class="n">width</span><span class="p">;</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">        </span><span class="kt">double</span><span class="w"> </span><span class="n">y</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">(</span><span class="n">tileOrigin</span><span class="p">()</span><span class="o">[</span><span class="n">1</span><span class="o">]</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="n">tileBounds</span><span class="p">.</span><span class="na">getMaxY</span><span class="p">())</span><span class="w"> </span><span class="o">/</span><span class="w"> </span><span class="n">height</span><span class="p">;</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">        </span><span class="kt">long</span><span class="w"> </span><span class="n">posX</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">Math</span><span class="p">.</span><span class="na">round</span><span class="p">(</span><span class="n">x</span><span class="p">);</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">        </span><span class="kt">long</span><span class="w"> </span><span class="n">posY</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">Math</span><span class="p">.</span><span class="na">round</span><span class="p">(</span><span class="n">y</span><span class="p">);</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">        </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">Math</span><span class="p">.</span><span class="na">abs</span><span class="p">(</span><span class="n">x</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="n">posX</span><span class="p">)</span><span class="w"> </span><span class="o">&gt;</span><span class="w"> </span><span class="n">0</span><span class="p">.</span><span class="na">1</span><span class="w"> </span><span class="o">||</span><span class="w"> </span><span class="n">Math</span><span class="p">.</span><span class="na">abs</span><span class="p">(</span><span class="n">y</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="n">posY</span><span class="p">)</span><span class="w"> </span><span class="o">&gt;</span><span class="w"> </span><span class="n">0</span><span class="p">.</span><span class="na">1</span><span class="p">)</span><span class="w"> </span><span class="p">{</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">            </span><span class="k">throw</span><span class="w"> </span><span class="k">new</span><span class="w"> </span><span class="n">MatrixAlignmentMismatchException</span><span class="p">(</span><span class="n">x</span><span class="p">,</span><span class="w"> </span><span class="n">posX</span><span class="p">,</span><span class="w"> </span><span class="n">y</span><span class="p">,</span><span class="w"> </span><span class="n">posY</span><span class="p">);</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">        </span><span class="p">}</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">        </span><span class="kt">long</span><span class="o">[]</span><span class="w"> </span><span class="n">ret</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">{</span><span class="n">posX</span><span class="p">,</span><span class="w"> </span><span class="n">posY</span><span class="p">,</span><span class="w"> </span><span class="n">level</span><span class="p">};</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">        </span><span class="k">return</span><span class="w"> </span><span class="n">ret</span><span class="p">;</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="p">}</span><span class="w">
+</span></span></span></code></pre></div><h5 id="closestrectangle"><strong>ClosestRectangle</strong><a hidden class="anchor" aria-hidden="true" href="#closestrectangle">#</a></h5>
+<p>此方法对应上文附录提到的将给定BBox转换为对应的一系列的瓦片坐标系。其同样是先找到与给定的BBox最匹配的TileMatrix的索引，而后计算对应索引层级下BBox对应的瓦片坐标范围。该方法适用于任意范围。</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-java" data-lang="java"><span class="line"><span class="cl"><span class="w">    </span><span class="kd">public</span><span class="w"> </span><span class="kt">long</span><span class="o">[]</span><span class="w"> </span><span class="nf">closestRectangle</span><span class="p">(</span><span class="n">BoundingBox</span><span class="w"> </span><span class="n">rectangleBounds</span><span class="p">)</span><span class="w"> </span><span class="p">{</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">        </span><span class="kt">double</span><span class="w"> </span><span class="n">rectWidth</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">rectangleBounds</span><span class="p">.</span><span class="na">getWidth</span><span class="p">();</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">        </span><span class="kt">double</span><span class="w"> </span><span class="n">rectHeight</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">rectangleBounds</span><span class="p">.</span><span class="na">getHeight</span><span class="p">();</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">        </span><span class="kt">double</span><span class="w"> </span><span class="n">bestError</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">Double</span><span class="p">.</span><span class="na">MAX_VALUE</span><span class="p">;</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">        </span><span class="kt">int</span><span class="w"> </span><span class="n">bestLevel</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="o">-</span><span class="n">1</span><span class="p">;</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">        </span><span class="c1">// Now we loop over the resolutions until</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">        </span><span class="k">for</span><span class="w"> </span><span class="p">(</span><span class="kt">int</span><span class="w"> </span><span class="n">i</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">0</span><span class="p">;</span><span class="w"> </span><span class="n">i</span><span class="w"> </span><span class="o">&lt;</span><span class="w"> </span><span class="n">getNumLevels</span><span class="p">();</span><span class="w"> </span><span class="n">i</span><span class="o">++</span><span class="p">)</span><span class="w"> </span><span class="p">{</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">            </span><span class="n">TileMatrix</span><span class="w"> </span><span class="n">grid</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">getMatrix</span><span class="p">(</span><span class="n">i</span><span class="p">);</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">            </span><span class="kt">double</span><span class="w"> </span><span class="n">countX</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">rectWidth</span><span class="w"> </span><span class="o">/</span><span class="w"> </span><span class="p">(</span><span class="n">grid</span><span class="p">.</span><span class="na">getResolution</span><span class="p">()</span><span class="w"> </span><span class="o">*</span><span class="w"> </span><span class="n">grid</span><span class="p">.</span><span class="na">getTileWidth</span><span class="p">());</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">            </span><span class="kt">double</span><span class="w"> </span><span class="n">countY</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">rectHeight</span><span class="w"> </span><span class="o">/</span><span class="w"> </span><span class="p">(</span><span class="n">grid</span><span class="p">.</span><span class="na">getResolution</span><span class="p">()</span><span class="w"> </span><span class="o">*</span><span class="w"> </span><span class="n">grid</span><span class="p">.</span><span class="na">getTileHeight</span><span class="p">());</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">            </span><span class="kt">double</span><span class="w"> </span><span class="n">error</span><span class="w"> </span><span class="o">=</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">                    </span><span class="n">Math</span><span class="p">.</span><span class="na">abs</span><span class="p">(</span><span class="n">countX</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="n">Math</span><span class="p">.</span><span class="na">round</span><span class="p">(</span><span class="n">countX</span><span class="p">))</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="n">Math</span><span class="p">.</span><span class="na">abs</span><span class="p">(</span><span class="n">countY</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="n">Math</span><span class="p">.</span><span class="na">round</span><span class="p">(</span><span class="n">countY</span><span class="p">));</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">            </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">error</span><span class="w"> </span><span class="o">&lt;</span><span class="w"> </span><span class="n">bestError</span><span class="p">)</span><span class="w"> </span><span class="p">{</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">                </span><span class="n">bestError</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">error</span><span class="p">;</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">                </span><span class="n">bestLevel</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">i</span><span class="p">;</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">            </span><span class="p">}</span><span class="w"> </span><span class="k">else</span><span class="w"> </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">error</span><span class="w"> </span><span class="o">&gt;=</span><span class="w"> </span><span class="n">bestError</span><span class="p">)</span><span class="w"> </span><span class="p">{</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">                </span><span class="k">break</span><span class="p">;</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">            </span><span class="p">}</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">        </span><span class="p">}</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">        </span><span class="k">return</span><span class="w"> </span><span class="n">closestRectangle</span><span class="p">(</span><span class="n">bestLevel</span><span class="p">,</span><span class="w"> </span><span class="n">rectangleBounds</span><span class="p">);</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="p">}</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="kd">protected</span><span class="w"> </span><span class="kt">long</span><span class="o">[]</span><span class="w"> </span><span class="nf">closestRectangle</span><span class="p">(</span><span class="kt">int</span><span class="w"> </span><span class="n">level</span><span class="p">,</span><span class="w"> </span><span class="n">BoundingBox</span><span class="w"> </span><span class="n">rectangeBounds</span><span class="p">)</span><span class="w"> </span><span class="p">{</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">        </span><span class="n">TileMatrix</span><span class="w"> </span><span class="n">grid</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">getMatrix</span><span class="p">(</span><span class="n">level</span><span class="p">);</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">        </span><span class="kt">double</span><span class="w"> </span><span class="n">width</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">grid</span><span class="p">.</span><span class="na">getResolution</span><span class="p">()</span><span class="w"> </span><span class="o">*</span><span class="w"> </span><span class="n">grid</span><span class="p">.</span><span class="na">getTileWidth</span><span class="p">();</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">        </span><span class="kt">double</span><span class="w"> </span><span class="n">height</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">grid</span><span class="p">.</span><span class="na">getResolution</span><span class="p">()</span><span class="w"> </span><span class="o">*</span><span class="w"> </span><span class="n">grid</span><span class="p">.</span><span class="na">getTileHeight</span><span class="p">();</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">        </span><span class="kt">long</span><span class="w"> </span><span class="n">minX</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">(</span><span class="kt">long</span><span class="p">)</span><span class="w"> </span><span class="n">Math</span><span class="p">.</span><span class="na">floor</span><span class="p">((</span><span class="n">rectangeBounds</span><span class="p">.</span><span class="na">getMinX</span><span class="p">()</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="n">tileOrigin</span><span class="p">()</span><span class="o">[</span><span class="n">0</span><span class="o">]</span><span class="p">)</span><span class="w"> </span><span class="o">/</span><span class="w"> </span><span class="n">width</span><span class="p">);</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">        </span><span class="kt">long</span><span class="w"> </span><span class="n">minY</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">(</span><span class="kt">long</span><span class="p">)</span><span class="w"> </span><span class="n">Math</span><span class="p">.</span><span class="na">floor</span><span class="p">((</span><span class="n">tileOrigin</span><span class="p">()</span><span class="o">[</span><span class="n">1</span><span class="o">]</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="n">rectangeBounds</span><span class="p">.</span><span class="na">getMaxY</span><span class="p">())</span><span class="w"> </span><span class="o">/</span><span class="w"> </span><span class="n">height</span><span class="p">);</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">        </span><span class="kt">long</span><span class="w"> </span><span class="n">maxX</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">(</span><span class="kt">long</span><span class="p">)</span><span class="w"> </span><span class="n">Math</span><span class="p">.</span><span class="na">ceil</span><span class="p">(((</span><span class="n">rectangeBounds</span><span class="p">.</span><span class="na">getMaxX</span><span class="p">()</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="n">tileOrigin</span><span class="p">()</span><span class="o">[</span><span class="n">0</span><span class="o">]</span><span class="p">)</span><span class="w"> </span><span class="o">/</span><span class="w"> </span><span class="n">width</span><span class="p">));</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">        </span><span class="kt">long</span><span class="w"> </span><span class="n">maxY</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">(</span><span class="kt">long</span><span class="p">)</span><span class="w"> </span><span class="n">Math</span><span class="p">.</span><span class="na">ceil</span><span class="p">(((</span><span class="n">tileOrigin</span><span class="p">()</span><span class="o">[</span><span class="n">1</span><span class="o">]</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="n">rectangeBounds</span><span class="p">.</span><span class="na">getMinY</span><span class="p">())</span><span class="w"> </span><span class="o">/</span><span class="w"> </span><span class="n">height</span><span class="p">));</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">        </span><span class="c1">// We substract one, since that&#39;s the tile at that position</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">        </span><span class="kt">long</span><span class="o">[]</span><span class="w"> </span><span class="n">ret</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">{</span><span class="n">minX</span><span class="p">,</span><span class="w"> </span><span class="n">minY</span><span class="p">,</span><span class="w"> </span><span class="n">maxX</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="n">1</span><span class="p">,</span><span class="w"> </span><span class="n">maxY</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="n">1</span><span class="p">,</span><span class="w"> </span><span class="n">level</span><span class="p">};</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">        </span><span class="k">return</span><span class="w"> </span><span class="n">ret</span><span class="p">;</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="p">}</span><span class="w">
+</span></span></span></code></pre></div><h2 id="tilematrixset-in-geo-atlas">TileMatrixSet in Geo Atlas<a hidden class="anchor" aria-hidden="true" href="#tilematrixset-in-geo-atlas">#</a></h2>
+<p>其实在<a href="https://fuyi-atlas.github.io/posts/program/geo-atlas/001/">Geo Atlas，用于构建矢量切片服务的Java基础库</a>一文中也曾提到，Pyramid、IO(in Library)、Tile Cache模块均来自GeoWebCache，是对其进行了拆解和少量变更。TileMatrixSet就是来自于GeoWebCache的GridSet，在此处对其进行了少量修改：</p>
+<ul>
+<li>
+<p>切片原点修改为左上角（GeoWebCache默认还是使用左下角作为切片原点，不过也支持配置为左上角）</p>
+</li>
+<li>
+<p>将构造GridSet的SRS变更为的CRS（不再割裂）</p>
+</li>
+<li>
+<p>默认提供3857&amp;4490（其实3857就是900913，只不过GeoTools原生并没有提供900913的坐标系声明；此处4490是遵循天地图CGCS2000经纬度等间隔直投的尺度分级构建，包含0级）</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-java" data-lang="java"><span class="line"><span class="cl"><span class="n">TileMatrixSet</span><span class="w"> </span><span class="n">WORLD_EPSG_3857</span><span class="w"> </span><span class="o">=</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">                    </span><span class="n">TileMatrixSetFactory</span><span class="p">.</span><span class="na">createTileMatrixSet</span><span class="p">(</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">                            </span><span class="n">projectedName</span><span class="p">,</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">                            </span><span class="n">CRS</span><span class="p">.</span><span class="na">decode</span><span class="p">(</span><span class="s">&#34;EPSG:3857&#34;</span><span class="p">,</span><span class="w"> </span><span class="kc">true</span><span class="p">),</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">                            </span><span class="n">BoundingBox</span><span class="p">.</span><span class="na">WORLD3857</span><span class="p">,</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">                            </span><span class="n">CornerOfOrigin</span><span class="p">.</span><span class="na">TOP_LEFT</span><span class="p">,</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">                            </span><span class="n">TileMatrixSetFactory</span><span class="p">.</span><span class="na">DEFAULT_LEVELS</span><span class="p">,</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">                            </span><span class="kc">null</span><span class="p">,</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">                            </span><span class="n">TileMatrixSetFactory</span><span class="p">.</span><span class="na">DEFAULT_PIXEL_SIZE_METER</span><span class="p">,</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">                            </span><span class="n">256</span><span class="p">,</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">                            </span><span class="n">256</span><span class="p">,</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">                            </span><span class="kc">false</span><span class="p">);</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w"></span><span class="n">TileMatrixSet</span><span class="w"> </span><span class="n">WORLD_EPSG_4490</span><span class="w"> </span><span class="o">=</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">                    </span><span class="n">TileMatrixSetFactory</span><span class="p">.</span><span class="na">createTileMatrixSet</span><span class="p">(</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">                            </span><span class="n">projectedName</span><span class="p">,</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">                            </span><span class="n">CRS</span><span class="p">.</span><span class="na">decode</span><span class="p">(</span><span class="s">&#34;EPSG:4490&#34;</span><span class="p">,</span><span class="w"> </span><span class="kc">true</span><span class="p">),</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">                            </span><span class="n">BoundingBox</span><span class="p">.</span><span class="na">WORLD4490</span><span class="p">,</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">                            </span><span class="n">CornerOfOrigin</span><span class="p">.</span><span class="na">TOP_LEFT</span><span class="p">,</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">                            </span><span class="n">1</span><span class="p">.</span><span class="na">40625d</span><span class="p">,</span><span class="w"> </span><span class="c1">// 天地图经纬度投影0级的分辨率</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">                            </span><span class="n">TileMatrixSetFactory</span><span class="p">.</span><span class="na">DEFAULT_LEVELS</span><span class="p">,</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">                            </span><span class="n">TileMatrixSetFactory</span><span class="p">.</span><span class="na">EPSG_4326_TO_METERS</span><span class="p">,</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">                            </span><span class="n">TileMatrixSetFactory</span><span class="p">.</span><span class="na">CGCS2000_PIXEL_SIZE_METER</span><span class="p">,</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">                            </span><span class="n">256</span><span class="p">,</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">                            </span><span class="n">256</span><span class="p">,</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">                            </span><span class="kc">false</span><span class="p">);</span><span class="w">
+</span></span></span></code></pre></div></li>
+<li>
+<p>命名变更，将GridSet变更为TileMatrixSet，Grid变更为TileMatrix。理由是：更符合瓦片矩阵的命名，同时OGC中也是如此命名的。</p>
+</li>
+</ul>
+<h2 id="小结">小结<a hidden class="anchor" aria-hidden="true" href="#小结">#</a></h2>
+<p>下篇尝试着对TileMatrixSet的相关计算原理进行探讨说明，文中先后描述了TileMatrixSet在GeoWebCache及Geo Atlas中的实现，同时结合天地图提供的两种投影（Web墨卡托以及CGCS2000经纬度等间隔直投）下的瓦片矩阵集进行计算验证。整体看来，感觉还是有些混乱，计算原理部分的说明不够清晰，未达成心中想要的标准（布局合理、前后连贯、逻辑分明、层层递进、朗朗上口，也未可知啊 😒），再接再厉吧！ 🙄</p>
+<p>个人理解始终有限，如有存在偏颇的方法，还希望大家多多指教 😬🤝！</p>
+<h2 id="参考">参考<a hidden class="anchor" aria-hidden="true" href="#参考">#</a></h2>
+<ul>
+<li><a href="http://jiangsu.tianditu.gov.cn/gaoyou/gytdt/download/%E7%94%B5%E5%AD%90%E5%9C%B0%E5%9B%BE%E6%95%B0%E6%8D%AE%E8%A7%84%E8%8C%83.pdf">电子地图数据规范</a></li>
+<li><a href="https://fuyi-atlas.github.io/posts/gis/what-is-tilematrixset/">再谈TileMatrixSet，二维瓦片金字塔结构的标准定义（上）</a></li>
+<li><a href="https://geowebcache.osgeo.org/docs/current/concepts/gridsets.html">Gridsets and Gridsubsets</a></li>
+<li><a href="http://support.supermap.com.cn/DataWarehouse/WebDocHelp/iPortal/Appendix/scale.htm">比例尺与分辨率</a></li>
+<li><a href="https://cntchen.github.io/2016/05/09/%E5%9B%BD%E5%86%85%E4%B8%BB%E8%A6%81%E5%9C%B0%E5%9B%BE%E7%93%A6%E7%89%87%E5%9D%90%E6%A0%87%E7%B3%BB%E5%AE%9A%E4%B9%89%E5%8F%8A%E8%AE%A1%E7%AE%97%E5%8E%9F%E7%90%86/">国内主要地图瓦片坐标系定义及计算原理</a></li>
+<li><a href="https://maslke.space/posts/2020/43467A63/">切片地图元信息配置说明</a></li>
+<li><a href="https://zh.wikipedia.org/wiki/Web%E5%A2%A8%E5%8D%A1%E6%89%98%E6%8A%95%E5%BD%B1">Web墨卡托投影</a></li>
+<li><a href="https://pro.arcgis.com/zh-cn/pro-app/latest/help/mapping/properties/mercator.htm">ESRI-墨卡托投影</a></li>
+<li><a href="https://baike.baidu.com/item/%E5%A2%A8%E5%8D%A1%E6%89%98%E6%8A%95%E5%BD%B1/5477927#:~:text=%E5%A2%A8%E5%8D%A1%E6%89%98%E6%8A%95%E5%BD%B1%EF%BC%8C%E6%98%AF,%E7%9A%84%E6%98%AF%E5%88%87%E5%9C%86%E6%9F%B1%E6%8A%95%E5%BD%B1%E3%80%82">百度百科-墨卡托投影</a></li>
+<li><a href="https://blog.csdn.net/gisarmory/article/details/123092051">未经投影的地理坐标系如何显示为平面地图</a></li>
+</ul>
+
+
+  </div>
+
+  <footer class="post-footer">
+    <ul class="post-tags">
+      <li><a href="https://fuyi-atlas.github.io/tags/tile-matrix-set/">Tile Matrix Set</a></li>
+      <li><a href="https://fuyi-atlas.github.io/tags/tile-matrix/">Tile Matrix</a></li>
+      <li><a href="https://fuyi-atlas.github.io/tags/tiling-schema/">Tiling Schema</a></li>
+      <li><a href="https://fuyi-atlas.github.io/tags/tile-set-metadata/">Tile Set Metadata</a></li>
+    </ul>
+<nav class="paginav">
+  <a class="prev" href="https://fuyi-atlas.github.io/posts/gis/what-is-gac/">
+    <span class="title">« Prev</span>
+    <br>
+    <span>Geo Atlas Cache，一个精简的GWC组件</span>
+  </a>
+  <a class="next" href="https://fuyi-atlas.github.io/posts/gis/what-is-tilematrixset/">
+    <span class="title">Next »</span>
+    <br>
+    <span>再谈TileMatrixSet，二维瓦片金字塔结构的标准定义（上）</span>
+  </a>
+</nav>
+
+  </footer>
+</article>
+    </main>
+    
+<footer class="footer">
+    <span>&copy; 2024 <a href="https://fuyi-atlas.github.io/">Fuyi Atlas</a></span>
+    <span>
+        Powered by
+        <a href="https://gohugo.io/" rel="noopener noreferrer" target="_blank">Hugo</a> &
+        <a href="https://github.com/adityatelange/hugo-PaperMod/" rel="noopener" target="_blank">PaperMod</a>
+    </span>
+</footer>
+<a href="#top" aria-label="go to top" title="Go to Top (Alt + G)" class="top-link" id="top-link" accesskey="g">
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 12 6" fill="currentColor">
+        <path d="M12 6H0l6-6z" />
+    </svg>
+</a>
+
+<script>
+    let menu = document.getElementById('menu')
+    if (menu) {
+        menu.scrollLeft = localStorage.getItem("menu-scroll-position");
+        menu.onscroll = function () {
+            localStorage.setItem("menu-scroll-position", menu.scrollLeft);
+        }
+    }
+
+    document.querySelectorAll('a[href^="#"]').forEach(anchor => {
+        anchor.addEventListener("click", function (e) {
+            e.preventDefault();
+            var id = this.getAttribute("href").substr(1);
+            if (!window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+                document.querySelector(`[id='${decodeURIComponent(id)}']`).scrollIntoView({
+                    behavior: "smooth"
+                });
+            } else {
+                document.querySelector(`[id='${decodeURIComponent(id)}']`).scrollIntoView();
+            }
+            if (id === "top") {
+                history.replaceState(null, null, " ");
+            } else {
+                history.pushState(null, null, `#${id}`);
+            }
+        });
+    });
+
+</script>
+<script>
+    var mybutton = document.getElementById("top-link");
+    window.onscroll = function () {
+        if (document.body.scrollTop > 800 || document.documentElement.scrollTop > 800) {
+            mybutton.style.visibility = "visible";
+            mybutton.style.opacity = "1";
+        } else {
+            mybutton.style.visibility = "hidden";
+            mybutton.style.opacity = "0";
+        }
+    };
+
+</script>
+<script>
+    document.getElementById("theme-toggle").addEventListener("click", () => {
+        if (document.body.className.includes("dark")) {
+            document.body.classList.remove('dark');
+            localStorage.setItem("pref-theme", 'light');
+        } else {
+            document.body.classList.add('dark');
+            localStorage.setItem("pref-theme", 'dark');
+        }
+    })
+
+</script>
+<script>
+    document.querySelectorAll('pre > code').forEach((codeblock) => {
+        const container = codeblock.parentNode.parentNode;
+
+        const copybutton = document.createElement('button');
+        copybutton.classList.add('copy-code');
+        copybutton.innerHTML = 'copy';
+
+        function copyingDone() {
+            copybutton.innerHTML = 'copied!';
+            setTimeout(() => {
+                copybutton.innerHTML = 'copy';
+            }, 2000);
+        }
+
+        copybutton.addEventListener('click', (cb) => {
+            if ('clipboard' in navigator) {
+                navigator.clipboard.writeText(codeblock.textContent);
+                copyingDone();
+                return;
+            }
+
+            const range = document.createRange();
+            range.selectNodeContents(codeblock);
+            const selection = window.getSelection();
+            selection.removeAllRanges();
+            selection.addRange(range);
+            try {
+                document.execCommand('copy');
+                copyingDone();
+            } catch (e) { };
+            selection.removeRange(range);
+        });
+
+        if (container.classList.contains("highlight")) {
+            container.appendChild(copybutton);
+        } else if (container.parentNode.firstChild == container) {
+            
+        } else if (codeblock.parentNode.parentNode.parentNode.parentNode.parentNode.nodeName == "TABLE") {
+            
+            codeblock.parentNode.parentNode.parentNode.parentNode.parentNode.appendChild(copybutton);
+        } else {
+            
+            codeblock.parentNode.appendChild(copybutton);
+        }
+    });
+</script>
+</body>
+
+</html>

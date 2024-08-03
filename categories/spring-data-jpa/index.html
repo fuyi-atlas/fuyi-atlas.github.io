@@ -1,0 +1,252 @@
+<!DOCTYPE html>
+<html lang="en" dir="auto">
+
+<head><meta charset="utf-8">
+<meta http-equiv="X-UA-Compatible" content="IE=edge">
+<meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
+<meta name="robots" content="index, follow">
+<title>Spring Data Jpa | Fuyi Atlas</title>
+<meta name="keywords" content="">
+<meta name="description" content="Fuyi Atlas - https://github.com/fuyi-atlas/fuyi-atlas.github.io">
+<meta name="author" content="Fuyi">
+<link rel="canonical" href="https://fuyi-atlas.github.io/categories/spring-data-jpa/">
+<link crossorigin="anonymous" href="/assets/css/stylesheet.a61ecc0df414536d559b3d0ca421e2b1de8f39b8a4910b32fedccecbc2c0d59c.css" integrity="sha256-ph7MDfQUU21Vmz0MpCHisd6PObikkQsy/tzOy8LA1Zw=" rel="preload stylesheet" as="style">
+<link rel="icon" href="https://fuyi-atlas.github.io/favicon.ico">
+<link rel="icon" type="image/png" sizes="16x16" href="https://fuyi-atlas.github.io/favicon-16x16.png">
+<link rel="icon" type="image/png" sizes="32x32" href="https://fuyi-atlas.github.io/favicon-32x32.png">
+<link rel="apple-touch-icon" href="https://fuyi-atlas.github.io/apple-touch-icon.png">
+<link rel="mask-icon" href="https://fuyi-atlas.github.io/safari-pinned-tab.svg">
+<meta name="theme-color" content="#2e2e33">
+<meta name="msapplication-TileColor" content="#2e2e33">
+<link rel="alternate" type="application/rss+xml" href="https://fuyi-atlas.github.io/categories/spring-data-jpa/index.xml">
+<link rel="alternate" hreflang="en" href="https://fuyi-atlas.github.io/categories/spring-data-jpa/">
+<noscript>
+    <style>
+        #theme-toggle,
+        .top-link {
+            display: none;
+        }
+
+    </style>
+    <style>
+        @media (prefers-color-scheme: dark) {
+            :root {
+                --theme: rgb(29, 30, 32);
+                --entry: rgb(46, 46, 51);
+                --primary: rgb(218, 218, 219);
+                --secondary: rgb(155, 156, 157);
+                --tertiary: rgb(65, 66, 68);
+                --content: rgb(196, 196, 197);
+                --code-block-bg: rgb(46, 46, 51);
+                --code-bg: rgb(55, 56, 62);
+                --border: rgb(51, 51, 51);
+            }
+
+            .list {
+                background: var(--theme);
+            }
+
+            .list:not(.dark)::-webkit-scrollbar-track {
+                background: 0 0;
+            }
+
+            .list:not(.dark)::-webkit-scrollbar-thumb {
+                border-color: var(--theme);
+            }
+        }
+
+    </style>
+</noscript><meta property="og:title" content="Spring Data Jpa" />
+<meta property="og:description" content="Fuyi Atlas - https://github.com/fuyi-atlas/fuyi-atlas.github.io" />
+<meta property="og:type" content="website" />
+<meta property="og:url" content="https://fuyi-atlas.github.io/categories/spring-data-jpa/" />
+
+<meta name="twitter:card" content="summary"/>
+<meta name="twitter:title" content="Spring Data Jpa"/>
+<meta name="twitter:description" content="Fuyi Atlas - https://github.com/fuyi-atlas/fuyi-atlas.github.io"/>
+
+</head>
+
+<body class="list" id="top">
+<script>
+    if (localStorage.getItem("pref-theme") === "dark") {
+        document.body.classList.add('dark');
+    } else if (localStorage.getItem("pref-theme") === "light") {
+        document.body.classList.remove('dark')
+    } else if (window.matchMedia('(prefers-color-scheme: dark)').matches) {
+        document.body.classList.add('dark');
+    }
+
+</script>
+
+<header class="header">
+    <nav class="nav">
+        <div class="logo">
+            <a href="https://fuyi-atlas.github.io/" accesskey="h" title="Fuyi Atlas (Alt + H)">Fuyi Atlas</a>
+            <div class="logo-switches">
+                <button id="theme-toggle" accesskey="t" title="(Alt + T)">
+                    <svg id="moon" xmlns="http://www.w3.org/2000/svg" width="24" height="18" viewBox="0 0 24 24"
+                        fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"
+                        stroke-linejoin="round">
+                        <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path>
+                    </svg>
+                    <svg id="sun" xmlns="http://www.w3.org/2000/svg" width="24" height="18" viewBox="0 0 24 24"
+                        fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"
+                        stroke-linejoin="round">
+                        <circle cx="12" cy="12" r="5"></circle>
+                        <line x1="12" y1="1" x2="12" y2="3"></line>
+                        <line x1="12" y1="21" x2="12" y2="23"></line>
+                        <line x1="4.22" y1="4.22" x2="5.64" y2="5.64"></line>
+                        <line x1="18.36" y1="18.36" x2="19.78" y2="19.78"></line>
+                        <line x1="1" y1="12" x2="3" y2="12"></line>
+                        <line x1="21" y1="12" x2="23" y2="12"></line>
+                        <line x1="4.22" y1="19.78" x2="5.64" y2="18.36"></line>
+                        <line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line>
+                    </svg>
+                </button>
+                <ul class="lang-switch"><li>|</li>
+                    <li>
+                        <a href="https://fuyi-atlas.github.io/zh/" title="Chinese"
+                            aria-label="Chinese">Zh</a>
+                    </li>
+                </ul>
+            </div>
+        </div>
+        <ul id="menu">
+            <li>
+                <a href="https://fuyi-atlas.github.io/archives/" title="Archive">
+                    <span>Archive</span>
+                </a>
+            </li>
+            <li>
+                <a href="https://fuyi-atlas.github.io/search/" title="Search (Alt &#43; /)" accesskey=/>
+                    <span>Search</span>
+                </a>
+            </li>
+            <li>
+                <a href="https://fuyi-atlas.github.io/categories/" title="Categories">
+                    <span>Categories</span>
+                </a>
+            </li>
+            <li>
+                <a href="https://fuyi-atlas.github.io/tags/" title="Tags">
+                    <span>Tags</span>
+                </a>
+            </li>
+        </ul>
+    </nav>
+</header>
+<main class="main"> 
+<header class="page-header"><div class="breadcrumbs"><a href="https://fuyi-atlas.github.io/">Home</a>&nbsp;»&nbsp;<a href="https://fuyi-atlas.github.io/categories/">Categories</a></div>
+  <h1>
+    Spring Data Jpa
+  </h1>
+</header>
+
+<article class="post-entry tag-entry"> 
+  <header class="entry-header">
+    <h2 class="entry-hint-parent">Spring Data JPA 使用入门
+    </h2>
+  </header>
+  <div class="entry-content">
+    <p>前言 我一直认为 Spring Data JPA 是一个好东西，有着自己独特的黑魔法。但是由于目前接触甚少，不知道该如何开启。所以想通过从无到有的过程，逐渐的去认识它，搞清楚它与Mybatis的关系，如果站在架构的角度看会怎么怎么样的情况。在这个过程中，会使用文字的方式将过程记录下来，也算是一点经历。
+Spring Data JPA 介绍 From spring.io：Spring Data JPA是Spring Data系列的一个组成部分，可以轻松快捷的实现数据访问层的增强支持，这使得基于Spring且使用了数据库访问技术的应用程序更加容易构建。Spring Data JPA 内置了简单数据库读写操作，包括分页查询，并提供接口以待增强。
+Spring Data JPA 是基于Hibernate（在3.2版本中便对JPA提供了完全的支持）、JPA规范的基础上封装的一套ORM框架，可以说就是JPA规范的一个实践落地的产品。Spring Data JPA的内置实现中提供了包括增删改查、分页、自定义SQL的常用功能，且提供接口以待拓展增强。基于Spring Data JPA可以简洁的代码，快速的实现对数据库的访问。
+使用示例 环境说明:
+windows 10 专业版 IntelliJ IDEA 2019.3.1 JDK 1.8 maven 3.6.1 Spring Boot 2.2.5.RELEASE 引入依赖 &lt;dependency&gt; &lt;groupId&gt;org.springframework.boot&lt;/groupId&gt; &lt;artifactId&gt;spring-boot-starter-data-jpa&lt;/artifactId&gt; &lt;/dependency&gt; &lt;!-- 我这里使用mysql作为数据存储 --&gt; &lt;dependency&gt; &lt;groupId&gt;mysql&lt;/groupId&gt; &lt;artifactId&gt;mysql-connector-java&lt;/artifactId&gt; &lt;scope&gt;runtime&lt;/scope&gt; &lt;/dependency&gt; &lt;dependency&gt; &lt;groupId&gt;org.projectlombok&lt;/groupId&gt; &lt;artifactId&gt;lombok&lt;/artifactId&gt; &lt;optional&gt;true&lt;/optional&gt; &lt;/dependency&gt; 定义一个简单实体 import javax.persistence.Entity; import javax.persistence.GeneratedValue; import javax.persistence.GenerationType; import javax.persistence.Id; /** * @author zhoujian */ @Entity public class Customer { @Id @GeneratedValue(strategy= GenerationType....</p>
+  </div>
+  <footer class="entry-footer"><span title='2020-07-14 22:12:23 +0800 CST'>July 14, 2020</span>&nbsp;·&nbsp;3 min&nbsp;·&nbsp;Fuyi</footer>
+  <a class="entry-link" aria-label="post link to Spring Data JPA 使用入门" href="https://fuyi-atlas.github.io/posts/program/spring-data-jpa/quick-start/"></a>
+</article>
+
+<article class="post-entry tag-entry"> 
+  <header class="entry-header">
+    <h2 class="entry-hint-parent">Spring Data JPA 与 Mybatis 对比分析
+    </h2>
+  </header>
+  <div class="entry-content">
+    <p>前言 其实，手写jdbc也是蛮好玩的…
+在企业开发过程中，除去一些特殊的要求外，基本上都会使用全自动或半自动的ORM框架代替原生JDBC进行数据库的访问。而在具体项目设计时，常常会根据项目业务情况进行技术选型。其中常用的ORM框架有：
+Mybatis Hibernate Spring Data JPA JdbcTemplate 在这里我们主要讨论Mybatis与Spring Data JPA。
+Spring Data JPA 1、JPA是什么 维基百科：JPA（Java Persistence API，Java持久化API）是一个Java应用程序接口规范，描述了使用Java标准平台（Java SE）和Java企业版平台（Java EE）的应用中的关系数据的管理。
+Spring Data JPA 全面解析：JPA (Java Persistence API) 是 Sun 官方提出的 Java 持久化规范。它为 Java 开发人员提供了一种对象/关联映射工具来管理 Java 应用中的关系数据。他的出现主要是为了简化现有的持久化开发工作和整合 ORM 技术，结束现在 Hibernate，TopLink，JDO 等 ORM 框架各自为营的局面。值得注意的是，JPA 是在充分吸收了现有 Hibernate，TopLink，JDO 等ORM框架的基础上发展而来的，具有易于使用，伸缩性强等优点。从目前的开发社区的反应上看，JPA 受到了极大的支持和赞扬，其中就包括了 Spring 与 EJB3.0 的开发团队
+JPA所维护的核心是实体（Entity Bean），而它是通过一个持久化上下文（Persistence Context）来使用的。持久化上下文包含了以前3个部分：
+对象关系映射（Object Relational Mapping，简称ORM）描述，JPA支持注解或XML两种形式的描述。 实体操作API，内置通用CRUD操作，来完成对象的持久化与查询。 查询语言，约定了面向对象的查询语句JPQL。 简单来说，JPA就是一种接口规范，一种定义了对象关系映射（ORM）以及实体对象的持久化接口标准的规范，并不是一套直接可用的产品（如：Hibernate）。
+2、什么是Spring Data JPA spring-data-jpa：Spring Data JPA是Spring Data系列的一个组成部分，可以轻松快捷的实现数据访问层的增强支持，这使得基于Spring且使用了数据库访问技术的应用程序更加容易构建。 Spring Data JPA 内置了简单数据库读写操作，包括分页查询，并提供接口以待增强。...</p>
+  </div>
+  <footer class="entry-footer"><span title='2020-07-14 21:49:59 +0800 CST'>July 14, 2020</span>&nbsp;·&nbsp;1 min&nbsp;·&nbsp;Fuyi</footer>
+  <a class="entry-link" aria-label="post link to Spring Data JPA 与 Mybatis 对比分析" href="https://fuyi-atlas.github.io/posts/program/spring-data-jpa/spring-data-jpa-vs-mybatis/"></a>
+</article>
+    </main>
+    
+<footer class="footer">
+    <span>&copy; 2024 <a href="https://fuyi-atlas.github.io/">Fuyi Atlas</a></span>
+    <span>
+        Powered by
+        <a href="https://gohugo.io/" rel="noopener noreferrer" target="_blank">Hugo</a> &
+        <a href="https://github.com/adityatelange/hugo-PaperMod/" rel="noopener" target="_blank">PaperMod</a>
+    </span>
+</footer>
+<a href="#top" aria-label="go to top" title="Go to Top (Alt + G)" class="top-link" id="top-link" accesskey="g">
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 12 6" fill="currentColor">
+        <path d="M12 6H0l6-6z" />
+    </svg>
+</a>
+
+<script>
+    let menu = document.getElementById('menu')
+    if (menu) {
+        menu.scrollLeft = localStorage.getItem("menu-scroll-position");
+        menu.onscroll = function () {
+            localStorage.setItem("menu-scroll-position", menu.scrollLeft);
+        }
+    }
+
+    document.querySelectorAll('a[href^="#"]').forEach(anchor => {
+        anchor.addEventListener("click", function (e) {
+            e.preventDefault();
+            var id = this.getAttribute("href").substr(1);
+            if (!window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+                document.querySelector(`[id='${decodeURIComponent(id)}']`).scrollIntoView({
+                    behavior: "smooth"
+                });
+            } else {
+                document.querySelector(`[id='${decodeURIComponent(id)}']`).scrollIntoView();
+            }
+            if (id === "top") {
+                history.replaceState(null, null, " ");
+            } else {
+                history.pushState(null, null, `#${id}`);
+            }
+        });
+    });
+
+</script>
+<script>
+    var mybutton = document.getElementById("top-link");
+    window.onscroll = function () {
+        if (document.body.scrollTop > 800 || document.documentElement.scrollTop > 800) {
+            mybutton.style.visibility = "visible";
+            mybutton.style.opacity = "1";
+        } else {
+            mybutton.style.visibility = "hidden";
+            mybutton.style.opacity = "0";
+        }
+    };
+
+</script>
+<script>
+    document.getElementById("theme-toggle").addEventListener("click", () => {
+        if (document.body.className.includes("dark")) {
+            document.body.classList.remove('dark');
+            localStorage.setItem("pref-theme", 'light');
+        } else {
+            document.body.classList.add('dark');
+            localStorage.setItem("pref-theme", 'dark');
+        }
+    })
+
+</script>
+</body>
+
+</html>

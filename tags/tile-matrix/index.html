@@ -1,0 +1,254 @@
+<!DOCTYPE html>
+<html lang="en" dir="auto">
+
+<head><meta charset="utf-8">
+<meta http-equiv="X-UA-Compatible" content="IE=edge">
+<meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
+<meta name="robots" content="index, follow">
+<title>Tile Matrix | Fuyi Atlas</title>
+<meta name="keywords" content="">
+<meta name="description" content="Fuyi Atlas - https://github.com/fuyi-atlas/fuyi-atlas.github.io">
+<meta name="author" content="Fuyi">
+<link rel="canonical" href="https://fuyi-atlas.github.io/tags/tile-matrix/">
+<link crossorigin="anonymous" href="/assets/css/stylesheet.a61ecc0df414536d559b3d0ca421e2b1de8f39b8a4910b32fedccecbc2c0d59c.css" integrity="sha256-ph7MDfQUU21Vmz0MpCHisd6PObikkQsy/tzOy8LA1Zw=" rel="preload stylesheet" as="style">
+<link rel="icon" href="https://fuyi-atlas.github.io/favicon.ico">
+<link rel="icon" type="image/png" sizes="16x16" href="https://fuyi-atlas.github.io/favicon-16x16.png">
+<link rel="icon" type="image/png" sizes="32x32" href="https://fuyi-atlas.github.io/favicon-32x32.png">
+<link rel="apple-touch-icon" href="https://fuyi-atlas.github.io/apple-touch-icon.png">
+<link rel="mask-icon" href="https://fuyi-atlas.github.io/safari-pinned-tab.svg">
+<meta name="theme-color" content="#2e2e33">
+<meta name="msapplication-TileColor" content="#2e2e33">
+<link rel="alternate" type="application/rss+xml" href="https://fuyi-atlas.github.io/tags/tile-matrix/index.xml">
+<link rel="alternate" hreflang="en" href="https://fuyi-atlas.github.io/tags/tile-matrix/">
+<noscript>
+    <style>
+        #theme-toggle,
+        .top-link {
+            display: none;
+        }
+
+    </style>
+    <style>
+        @media (prefers-color-scheme: dark) {
+            :root {
+                --theme: rgb(29, 30, 32);
+                --entry: rgb(46, 46, 51);
+                --primary: rgb(218, 218, 219);
+                --secondary: rgb(155, 156, 157);
+                --tertiary: rgb(65, 66, 68);
+                --content: rgb(196, 196, 197);
+                --code-block-bg: rgb(46, 46, 51);
+                --code-bg: rgb(55, 56, 62);
+                --border: rgb(51, 51, 51);
+            }
+
+            .list {
+                background: var(--theme);
+            }
+
+            .list:not(.dark)::-webkit-scrollbar-track {
+                background: 0 0;
+            }
+
+            .list:not(.dark)::-webkit-scrollbar-thumb {
+                border-color: var(--theme);
+            }
+        }
+
+    </style>
+</noscript><meta property="og:title" content="Tile Matrix" />
+<meta property="og:description" content="Fuyi Atlas - https://github.com/fuyi-atlas/fuyi-atlas.github.io" />
+<meta property="og:type" content="website" />
+<meta property="og:url" content="https://fuyi-atlas.github.io/tags/tile-matrix/" />
+
+<meta name="twitter:card" content="summary"/>
+<meta name="twitter:title" content="Tile Matrix"/>
+<meta name="twitter:description" content="Fuyi Atlas - https://github.com/fuyi-atlas/fuyi-atlas.github.io"/>
+
+</head>
+
+<body class="list" id="top">
+<script>
+    if (localStorage.getItem("pref-theme") === "dark") {
+        document.body.classList.add('dark');
+    } else if (localStorage.getItem("pref-theme") === "light") {
+        document.body.classList.remove('dark')
+    } else if (window.matchMedia('(prefers-color-scheme: dark)').matches) {
+        document.body.classList.add('dark');
+    }
+
+</script>
+
+<header class="header">
+    <nav class="nav">
+        <div class="logo">
+            <a href="https://fuyi-atlas.github.io/" accesskey="h" title="Fuyi Atlas (Alt + H)">Fuyi Atlas</a>
+            <div class="logo-switches">
+                <button id="theme-toggle" accesskey="t" title="(Alt + T)">
+                    <svg id="moon" xmlns="http://www.w3.org/2000/svg" width="24" height="18" viewBox="0 0 24 24"
+                        fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"
+                        stroke-linejoin="round">
+                        <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path>
+                    </svg>
+                    <svg id="sun" xmlns="http://www.w3.org/2000/svg" width="24" height="18" viewBox="0 0 24 24"
+                        fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"
+                        stroke-linejoin="round">
+                        <circle cx="12" cy="12" r="5"></circle>
+                        <line x1="12" y1="1" x2="12" y2="3"></line>
+                        <line x1="12" y1="21" x2="12" y2="23"></line>
+                        <line x1="4.22" y1="4.22" x2="5.64" y2="5.64"></line>
+                        <line x1="18.36" y1="18.36" x2="19.78" y2="19.78"></line>
+                        <line x1="1" y1="12" x2="3" y2="12"></line>
+                        <line x1="21" y1="12" x2="23" y2="12"></line>
+                        <line x1="4.22" y1="19.78" x2="5.64" y2="18.36"></line>
+                        <line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line>
+                    </svg>
+                </button>
+                <ul class="lang-switch"><li>|</li>
+                    <li>
+                        <a href="https://fuyi-atlas.github.io/zh/" title="Chinese"
+                            aria-label="Chinese">Zh</a>
+                    </li>
+                </ul>
+            </div>
+        </div>
+        <ul id="menu">
+            <li>
+                <a href="https://fuyi-atlas.github.io/archives/" title="Archive">
+                    <span>Archive</span>
+                </a>
+            </li>
+            <li>
+                <a href="https://fuyi-atlas.github.io/search/" title="Search (Alt &#43; /)" accesskey=/>
+                    <span>Search</span>
+                </a>
+            </li>
+            <li>
+                <a href="https://fuyi-atlas.github.io/categories/" title="Categories">
+                    <span>Categories</span>
+                </a>
+            </li>
+            <li>
+                <a href="https://fuyi-atlas.github.io/tags/" title="Tags">
+                    <span>Tags</span>
+                </a>
+            </li>
+        </ul>
+    </nav>
+</header>
+<main class="main"> 
+<header class="page-header"><div class="breadcrumbs"><a href="https://fuyi-atlas.github.io/">Home</a>&nbsp;»&nbsp;<a href="https://fuyi-atlas.github.io/tags/">Tags</a></div>
+  <h1>
+    Tile Matrix
+  </h1>
+</header>
+
+<article class="post-entry tag-entry"> 
+  <header class="entry-header">
+    <h2 class="entry-hint-parent">再谈TileMatrixSet，二维瓦片金字塔结构的标准定义（下）
+    </h2>
+  </header>
+  <div class="entry-content">
+    <p>前言 书接上回，本章节为下篇：TileMatrixSet实现及相关计算原理探讨。
+本章节将以TileMatrixSet模型的典型实现，即GeoWebCache中的Gridset作为开端，对OGC中TileMatrxSet模型进行印证。而后对TileMatrixSet相关计算原理进行探讨，并以CGCS2000切片方案为例进行验证。另附带说明TileMatrixSet在Geo Atlas中的实现及应用 🤨。
+Gridset &amp; TileMatrixSet 这里就不再对GeoWebCache做介绍了，直接切入主题。GeoWebCache中的Gridset正是对应着TileMatrixSet模型，我们先来看一下GeoWebCache对于Gridset的相关介绍：
+Gridsets and Gridsubsets Gridsets 和 Gridsubsets 是指 GeoWebCache 所服务的图层的空间参考系统（the spatial reference system）。从本质上来说，正如 Tiles 中所介绍的，GeoWebCache 与参考系统无关。当 GeoWebCache 向 WMS 发出请求时，它使用 Gridsets 和 Gridsubsets 信息将其内部切片索引转换为 WMS 可以理解的空间请求。
+💡 说实话，有时候我觉得老外的啰嗦话挺多的，其实这里就是表达GeoWebCache就是使用 Gridsets 和 Gridsubsets 将瓦片坐标转换为瓦片对应的空间范围的。从其实现来看，此处所述的内部切片索引正是对应着瓦片坐标系。
+下面分别对 Gridset 和 Gridsubset 的构成进行描述，此处引用原文：
+A gridset is a global definition (i.e. not layer-specific) specifying:
+全局定义即对应着通用的切片方案，所以不是特定于层（图层）的。
+A spatial reference system (EPSG code)
+对应着投影坐标系。
+A bounding box describing the extent, typically the maximum extent for the above reference system...</p>
+  </div>
+  <footer class="entry-footer"><span title='2024-07-11 17:18:03 +0800 CST'>July 11, 2024</span>&nbsp;·&nbsp;7 min&nbsp;·&nbsp;Fuyi</footer>
+  <a class="entry-link" aria-label="post link to 再谈TileMatrixSet，二维瓦片金字塔结构的标准定义（下）" href="https://fuyi-atlas.github.io/posts/gis/what-is-tilematrixset-calculation-principle/"></a>
+</article>
+
+<article class="post-entry tag-entry"> 
+  <header class="entry-header">
+    <h2 class="entry-hint-parent">再谈TileMatrixSet，二维瓦片金字塔结构的标准定义（上）
+    </h2>
+  </header>
+  <div class="entry-content">
+    <p>前言 其实，在此前矢量金字塔技术研究一文中已经大致提及了瓦片金字塔与TileMatrixSet的关系，为什么还要在这里再次说明呢？主要是前文更侧重于矢量金字塔的概念定义，对于TileMatrixSet的描述过少，所以才会再次对TileMatrixSet进行说明。本文将基于 OGC Two Dimensional Tile Matrix Set 标准对TileMatrixSet进行研究探讨，将侧重于说明其基本构成要素的定义以及整体的技术实现。而GeoWebCache中的GridSet作为典型实现，本文将会对其进行再次说明，以印证OGC 关于TileMatrixSet的定义。由于内容较多，本文将分为下上两个篇章进行描述。上篇是对TileMatrixSet以及其构成要素的基本概念进行描述，而下篇则是对GeoWebCache中的GridSet实现进行研究，同时结合我国CGCS2000切片方案对TileMatrixSet格网划分计算原理进行探讨，另附带说明Geo Atlas中关于此模块的实现细节。
+本章节为上篇：TileMatrixSet及其构成要素的基本概念。
+什么是TileMatrixSet？ TileMatrixSet，即Tile Matrix Set，源自 OGC Two Dimensional Tile Matrix Set(目前已更新到v2)。该标准定义了瓦片矩阵集的规则和要求，作为一种基于一组规则网格对空间进行索引的方式，这些规则网格为坐标参考系统中有限比例列表定义了一个域（瓦片矩阵）。
+💡 The OGC Two Dimensional Tile Matrix Set and Tile Set Metadata Standard defines the rules and requirements for a tile matrix set as a way to index space based on a set of regular grids defining a domain (tile matrix) for a limited list of scales in a Coordinate Reference System....</p>
+  </div>
+  <footer class="entry-footer"><span title='2024-07-03 16:36:55 +0800 CST'>July 3, 2024</span>&nbsp;·&nbsp;8 min&nbsp;·&nbsp;Fuyi</footer>
+  <a class="entry-link" aria-label="post link to 再谈TileMatrixSet，二维瓦片金字塔结构的标准定义（上）" href="https://fuyi-atlas.github.io/posts/gis/what-is-tilematrixset/"></a>
+</article>
+    </main>
+    
+<footer class="footer">
+    <span>&copy; 2024 <a href="https://fuyi-atlas.github.io/">Fuyi Atlas</a></span>
+    <span>
+        Powered by
+        <a href="https://gohugo.io/" rel="noopener noreferrer" target="_blank">Hugo</a> &
+        <a href="https://github.com/adityatelange/hugo-PaperMod/" rel="noopener" target="_blank">PaperMod</a>
+    </span>
+</footer>
+<a href="#top" aria-label="go to top" title="Go to Top (Alt + G)" class="top-link" id="top-link" accesskey="g">
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 12 6" fill="currentColor">
+        <path d="M12 6H0l6-6z" />
+    </svg>
+</a>
+
+<script>
+    let menu = document.getElementById('menu')
+    if (menu) {
+        menu.scrollLeft = localStorage.getItem("menu-scroll-position");
+        menu.onscroll = function () {
+            localStorage.setItem("menu-scroll-position", menu.scrollLeft);
+        }
+    }
+
+    document.querySelectorAll('a[href^="#"]').forEach(anchor => {
+        anchor.addEventListener("click", function (e) {
+            e.preventDefault();
+            var id = this.getAttribute("href").substr(1);
+            if (!window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+                document.querySelector(`[id='${decodeURIComponent(id)}']`).scrollIntoView({
+                    behavior: "smooth"
+                });
+            } else {
+                document.querySelector(`[id='${decodeURIComponent(id)}']`).scrollIntoView();
+            }
+            if (id === "top") {
+                history.replaceState(null, null, " ");
+            } else {
+                history.pushState(null, null, `#${id}`);
+            }
+        });
+    });
+
+</script>
+<script>
+    var mybutton = document.getElementById("top-link");
+    window.onscroll = function () {
+        if (document.body.scrollTop > 800 || document.documentElement.scrollTop > 800) {
+            mybutton.style.visibility = "visible";
+            mybutton.style.opacity = "1";
+        } else {
+            mybutton.style.visibility = "hidden";
+            mybutton.style.opacity = "0";
+        }
+    };
+
+</script>
+<script>
+    document.getElementById("theme-toggle").addEventListener("click", () => {
+        if (document.body.className.includes("dark")) {
+            document.body.classList.remove('dark');
+            localStorage.setItem("pref-theme", 'light');
+        } else {
+            document.body.classList.add('dark');
+            localStorage.setItem("pref-theme", 'dark');
+        }
+    })
+
+</script>
+</body>
+
+</html>

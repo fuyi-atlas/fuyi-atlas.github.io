@@ -1,0 +1,574 @@
+<!DOCTYPE html>
+<html lang="en" dir="auto">
+
+<head><meta charset="utf-8">
+<meta http-equiv="X-UA-Compatible" content="IE=edge">
+<meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
+<meta name="robots" content="index, follow">
+<title>GeoServer开发环境搭建 | Fuyi Atlas</title>
+<meta name="keywords" content="geoserver, dev env">
+<meta name="description" content="前言 本文用于记录GeoServer开发环境的搭建过程
+通过GeoServer发布计划可以看到，在2.23.x版本开始，会移除对jdk1.8的支持。那么当前我们会选择2.22.x版本进行研究
+环境 JAVA：1.8或11 Maven Git Action 获取源码 git clone git://github.com/geoserver/geoserver.git geoserver # or git clone https://github.com/geoserver/geoserver.git geoserver 代码库结构 Each branch has the following structure:
+build - release and continuous integration scripts doc - sources for the user and developer guides src - java sources for GeoServer itself data - a variety of GeoServer data directories / configurations 切换到2.22.x分支 # 查看分支 git branch -av # 切换分支 git checkout -b 2.">
+<meta name="author" content="Fuyi">
+<link rel="canonical" href="https://fuyi-atlas.github.io/posts/program/geoserver/002/">
+<link crossorigin="anonymous" href="/assets/css/stylesheet.a61ecc0df414536d559b3d0ca421e2b1de8f39b8a4910b32fedccecbc2c0d59c.css" integrity="sha256-ph7MDfQUU21Vmz0MpCHisd6PObikkQsy/tzOy8LA1Zw=" rel="preload stylesheet" as="style">
+<link rel="icon" href="https://fuyi-atlas.github.io/favicon.ico">
+<link rel="icon" type="image/png" sizes="16x16" href="https://fuyi-atlas.github.io/favicon-16x16.png">
+<link rel="icon" type="image/png" sizes="32x32" href="https://fuyi-atlas.github.io/favicon-32x32.png">
+<link rel="apple-touch-icon" href="https://fuyi-atlas.github.io/apple-touch-icon.png">
+<link rel="mask-icon" href="https://fuyi-atlas.github.io/safari-pinned-tab.svg">
+<meta name="theme-color" content="#2e2e33">
+<meta name="msapplication-TileColor" content="#2e2e33">
+<link rel="alternate" hreflang="en" href="https://fuyi-atlas.github.io/posts/program/geoserver/002/">
+<noscript>
+    <style>
+        #theme-toggle,
+        .top-link {
+            display: none;
+        }
+
+    </style>
+    <style>
+        @media (prefers-color-scheme: dark) {
+            :root {
+                --theme: rgb(29, 30, 32);
+                --entry: rgb(46, 46, 51);
+                --primary: rgb(218, 218, 219);
+                --secondary: rgb(155, 156, 157);
+                --tertiary: rgb(65, 66, 68);
+                --content: rgb(196, 196, 197);
+                --code-block-bg: rgb(46, 46, 51);
+                --code-bg: rgb(55, 56, 62);
+                --border: rgb(51, 51, 51);
+            }
+
+            .list {
+                background: var(--theme);
+            }
+
+            .list:not(.dark)::-webkit-scrollbar-track {
+                background: 0 0;
+            }
+
+            .list:not(.dark)::-webkit-scrollbar-thumb {
+                border-color: var(--theme);
+            }
+        }
+
+    </style>
+</noscript><meta property="og:title" content="GeoServer开发环境搭建" />
+<meta property="og:description" content="前言 本文用于记录GeoServer开发环境的搭建过程
+通过GeoServer发布计划可以看到，在2.23.x版本开始，会移除对jdk1.8的支持。那么当前我们会选择2.22.x版本进行研究
+环境 JAVA：1.8或11 Maven Git Action 获取源码 git clone git://github.com/geoserver/geoserver.git geoserver # or git clone https://github.com/geoserver/geoserver.git geoserver 代码库结构 Each branch has the following structure:
+build - release and continuous integration scripts doc - sources for the user and developer guides src - java sources for GeoServer itself data - a variety of GeoServer data directories / configurations 切换到2.22.x分支 # 查看分支 git branch -av # 切换分支 git checkout -b 2." />
+<meta property="og:type" content="article" />
+<meta property="og:url" content="https://fuyi-atlas.github.io/posts/program/geoserver/002/" /><meta property="article:section" content="posts" />
+<meta property="article:published_time" content="2023-03-09T22:33:44+08:00" />
+<meta property="article:modified_time" content="2023-03-09T22:33:44+08:00" />
+
+<meta name="twitter:card" content="summary"/>
+<meta name="twitter:title" content="GeoServer开发环境搭建"/>
+<meta name="twitter:description" content="前言 本文用于记录GeoServer开发环境的搭建过程
+通过GeoServer发布计划可以看到，在2.23.x版本开始，会移除对jdk1.8的支持。那么当前我们会选择2.22.x版本进行研究
+环境 JAVA：1.8或11 Maven Git Action 获取源码 git clone git://github.com/geoserver/geoserver.git geoserver # or git clone https://github.com/geoserver/geoserver.git geoserver 代码库结构 Each branch has the following structure:
+build - release and continuous integration scripts doc - sources for the user and developer guides src - java sources for GeoServer itself data - a variety of GeoServer data directories / configurations 切换到2.22.x分支 # 查看分支 git branch -av # 切换分支 git checkout -b 2."/>
+
+
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "BreadcrumbList",
+  "itemListElement": [
+    {
+      "@type": "ListItem",
+      "position":  1 ,
+      "name": "Posts",
+      "item": "https://fuyi-atlas.github.io/posts/"
+    }, 
+    {
+      "@type": "ListItem",
+      "position":  2 ,
+      "name": "GeoServer开发环境搭建",
+      "item": "https://fuyi-atlas.github.io/posts/program/geoserver/002/"
+    }
+  ]
+}
+</script>
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "BlogPosting",
+  "headline": "GeoServer开发环境搭建",
+  "name": "GeoServer开发环境搭建",
+  "description": "前言 本文用于记录GeoServer开发环境的搭建过程\n通过GeoServer发布计划可以看到，在2.23.x版本开始，会移除对jdk1.8的支持。那么当前我们会选择2.22.x版本进行研究\n环境 JAVA：1.8或11 Maven Git Action 获取源码 git clone git://github.com/geoserver/geoserver.git geoserver # or git clone https://github.com/geoserver/geoserver.git geoserver 代码库结构 Each branch has the following structure:\nbuild - release and continuous integration scripts doc - sources for the user and developer guides src - java sources for GeoServer itself data - a variety of GeoServer data directories / configurations 切换到2.22.x分支 # 查看分支 git branch -av # 切换分支 git checkout -b 2.",
+  "keywords": [
+    "geoserver", "dev env"
+  ],
+  "articleBody": "前言 本文用于记录GeoServer开发环境的搭建过程\n通过GeoServer发布计划可以看到，在2.23.x版本开始，会移除对jdk1.8的支持。那么当前我们会选择2.22.x版本进行研究\n环境 JAVA：1.8或11 Maven Git Action 获取源码 git clone git://github.com/geoserver/geoserver.git geoserver # or git clone https://github.com/geoserver/geoserver.git geoserver 代码库结构 Each branch has the following structure:\nbuild - release and continuous integration scripts doc - sources for the user and developer guides src - java sources for GeoServer itself data - a variety of GeoServer data directories / configurations 切换到2.22.x分支 # 查看分支 git branch -av # 切换分支 git checkout -b 2.22.x origin/2.22.x Import modules into IntelliJ Run the IntelliJ IDE\nFrom the initial panel select Open.\nNavigate to the geoserver/src/pom.xml directory and click OK. When asked click on Open as a Project. Optionally, depending on which platform, IntelliJ may ask to Trust the Project. Wait for IntelliJ to Sync the dependencies, it’s possible to follow the process from the Build tab panel on the bottom. Finalize the GeoServer Project configuration Click File \u003e Project Structure. Update the Name and select the correct SDK accordingly to the GeoServer version. Click File \u003e Settings. From Build, Execution, Deployment \u003e Compiler \u003e Annotation Processors, enable the Annotation processing. Click Build \u003e Rebuild Project. Run GeoServer from IntelliJ From the Project browser select the web-app module Navigate to the org.geoserver.web package Right-click the Start class and click to Modify Run Configuration... 如果没有该选项，那么直接去Edit Configurations处创建一个即可，Add Configuration，选择Application\nIt is important to correctly set the Working directory to src/web/app. While having the Edit Configurations dialog open, fine tune the launch environment (including setting a GEOSERVER_DATA_DIR or the jetty.port). When settings are satisfactory, click OK. It’s possible now to run GeoServer by selecting Run -\u003e Run 'Start' 第一次启动比较慢\nAccess GeoServer front page After a few seconds, GeoServer should be accessible at: http://localhost:8080/geoserver The default admin password is geoserver. FAQ 依赖下载失败或过慢（该条仅供参考） 使用阿里云Maven镜像加速依赖下载，可以参考阿里云Maven向导进行设置【有代理（科学上网）应该就不需要了】\nmaven配置文件优先级，maven工具所在的conf配置 \u003e 外部化配置\n编译提示Node不存在（wcs1_1） 网络上有一些提示是：手动添加Node的依赖。但是我认为应该不需要手动设置才是，因为从官网的maven quick start中，并未使用任何的编辑器，直接命令行搞定。\n# skip unit tests, skip spotless(Spotless is used as a fast way to check that the google-java-format is being applied to the codebase.) mvn clean install -DskipTests -Dspotless.apply.skip=true # 不想install, package也可以 mvn clean package -DskipTests -Dspotless.apply.skip=true 这个时候可以看到，Node这个类存在于编译后的代码中\n通过跟踪构建过程可以看到，是由javacc在编译过程中生成的（根据rangeset.jjt文件，知识盲区了）\n其实在官方文档中已经提到了如何处理该问题的，参见Troubleshooting#1，就是需要先完成wcs1_1模块的编译构建。\n我就不管那么多了，直接把所有的都构建了\nMaven 使用 参见：GeoServer Maven Guide\n参考 IntelliJ QuickStart\nGeoServer Maven Guide\n阿里云云效Maven\n",
+  "wordCount" : "341",
+  "inLanguage": "en",
+  "datePublished": "2023-03-09T22:33:44+08:00",
+  "dateModified": "2023-03-09T22:33:44+08:00",
+  "author":{
+    "@type": "Person",
+    "name": "Fuyi"
+  },
+  "mainEntityOfPage": {
+    "@type": "WebPage",
+    "@id": "https://fuyi-atlas.github.io/posts/program/geoserver/002/"
+  },
+  "publisher": {
+    "@type": "Organization",
+    "name": "Fuyi Atlas",
+    "logo": {
+      "@type": "ImageObject",
+      "url": "https://fuyi-atlas.github.io/favicon.ico"
+    }
+  }
+}
+</script>
+</head>
+
+<body class="" id="top">
+<script>
+    if (localStorage.getItem("pref-theme") === "dark") {
+        document.body.classList.add('dark');
+    } else if (localStorage.getItem("pref-theme") === "light") {
+        document.body.classList.remove('dark')
+    } else if (window.matchMedia('(prefers-color-scheme: dark)').matches) {
+        document.body.classList.add('dark');
+    }
+
+</script>
+
+<header class="header">
+    <nav class="nav">
+        <div class="logo">
+            <a href="https://fuyi-atlas.github.io/" accesskey="h" title="Fuyi Atlas (Alt + H)">Fuyi Atlas</a>
+            <div class="logo-switches">
+                <button id="theme-toggle" accesskey="t" title="(Alt + T)">
+                    <svg id="moon" xmlns="http://www.w3.org/2000/svg" width="24" height="18" viewBox="0 0 24 24"
+                        fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"
+                        stroke-linejoin="round">
+                        <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path>
+                    </svg>
+                    <svg id="sun" xmlns="http://www.w3.org/2000/svg" width="24" height="18" viewBox="0 0 24 24"
+                        fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"
+                        stroke-linejoin="round">
+                        <circle cx="12" cy="12" r="5"></circle>
+                        <line x1="12" y1="1" x2="12" y2="3"></line>
+                        <line x1="12" y1="21" x2="12" y2="23"></line>
+                        <line x1="4.22" y1="4.22" x2="5.64" y2="5.64"></line>
+                        <line x1="18.36" y1="18.36" x2="19.78" y2="19.78"></line>
+                        <line x1="1" y1="12" x2="3" y2="12"></line>
+                        <line x1="21" y1="12" x2="23" y2="12"></line>
+                        <line x1="4.22" y1="19.78" x2="5.64" y2="18.36"></line>
+                        <line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line>
+                    </svg>
+                </button>
+                <ul class="lang-switch"><li>|</li>
+                    <li>
+                        <a href="https://fuyi-atlas.github.io/zh/" title="Chinese"
+                            aria-label="Chinese">Zh</a>
+                    </li>
+                </ul>
+            </div>
+        </div>
+        <ul id="menu">
+            <li>
+                <a href="https://fuyi-atlas.github.io/archives/" title="Archive">
+                    <span>Archive</span>
+                </a>
+            </li>
+            <li>
+                <a href="https://fuyi-atlas.github.io/search/" title="Search (Alt &#43; /)" accesskey=/>
+                    <span>Search</span>
+                </a>
+            </li>
+            <li>
+                <a href="https://fuyi-atlas.github.io/categories/" title="Categories">
+                    <span>Categories</span>
+                </a>
+            </li>
+            <li>
+                <a href="https://fuyi-atlas.github.io/tags/" title="Tags">
+                    <span>Tags</span>
+                </a>
+            </li>
+        </ul>
+    </nav>
+</header>
+<main class="main">
+
+<article class="post-single">
+  <header class="post-header">
+    <div class="breadcrumbs"><a href="https://fuyi-atlas.github.io/">Home</a>&nbsp;»&nbsp;<a href="https://fuyi-atlas.github.io/posts/">Posts</a></div>
+    <h1 class="post-title entry-hint-parent">
+      GeoServer开发环境搭建
+    </h1>
+    <div class="post-meta"><span title='2023-03-09 22:33:44 +0800 CST'>March 9, 2023</span>&nbsp;·&nbsp;2 min&nbsp;·&nbsp;Fuyi
+
+</div>
+  </header> <div class="toc">
+    <details >
+        <summary accesskey="c" title="(Alt + C)">
+            <span class="details">Table of Contents</span>
+        </summary>
+
+        <div class="inner"><ul>
+                <li>
+                    <a href="#%e5%89%8d%e8%a8%80" aria-label="前言">前言</a><ul>
+                        
+                <li>
+                    <a href="#%e7%8e%af%e5%a2%83" aria-label="环境">环境</a></li></ul>
+                </li>
+                <li>
+                    <a href="#action" aria-label="Action">Action</a><ul>
+                        
+                <li>
+                    <a href="#%e8%8e%b7%e5%8f%96%e6%ba%90%e7%a0%81" aria-label="获取源码">获取源码</a></li>
+                <li>
+                    <a href="#%e4%bb%a3%e7%a0%81%e5%ba%93%e7%bb%93%e6%9e%84" aria-label="代码库结构">代码库结构</a></li>
+                <li>
+                    <a href="#%e5%88%87%e6%8d%a2%e5%88%b0222x%e5%88%86%e6%94%af" aria-label="切换到2.22.x分支">切换到2.22.x分支</a></li>
+                <li>
+                    <a href="#import-modules-into-intellij" aria-label="Import modules into IntelliJ">Import modules into IntelliJ</a></li>
+                <li>
+                    <a href="#finalize-the-geoserver-project-configuration" aria-label="Finalize the GeoServer Project configuration">Finalize the GeoServer Project configuration</a></li>
+                <li>
+                    <a href="#run-geoserver-from-intellij" aria-label="Run GeoServer from IntelliJ">Run GeoServer from IntelliJ</a></li>
+                <li>
+                    <a href="#access-geoserver-front-page" aria-label="Access GeoServer front page">Access GeoServer front page</a></li></ul>
+                </li>
+                <li>
+                    <a href="#faq" aria-label="FAQ">FAQ</a><ul>
+                        
+                <li>
+                    <a href="#%e4%be%9d%e8%b5%96%e4%b8%8b%e8%bd%bd%e5%a4%b1%e8%b4%a5%e6%88%96%e8%bf%87%e6%85%a2%e8%af%a5%e6%9d%a1%e4%bb%85%e4%be%9b%e5%8f%82%e8%80%83" aria-label="依赖下载失败或过慢（该条仅供参考）">依赖下载失败或过慢（该条仅供参考）</a></li>
+                <li>
+                    <a href="#%e7%bc%96%e8%af%91%e6%8f%90%e7%a4%banode%e4%b8%8d%e5%ad%98%e5%9c%a8wcs1_1" aria-label="编译提示Node不存在（wcs1_1）">编译提示Node不存在（wcs1_1）</a></li>
+                <li>
+                    <a href="#maven-%e4%bd%bf%e7%94%a8" aria-label="Maven 使用">Maven 使用</a></li></ul>
+                </li>
+                <li>
+                    <a href="#%e5%8f%82%e8%80%83" aria-label="参考">参考</a>
+                </li>
+            </ul>
+        </div>
+    </details>
+</div>
+
+  <div class="post-content"><h2 id="前言">前言<a hidden class="anchor" aria-hidden="true" href="#前言">#</a></h2>
+<p>本文用于记录GeoServer开发环境的搭建过程</p>
+<p><img loading="lazy" src="https://zhou-fuyi.github.io/picx-images-hosting/release.70a37d6whs.webp" alt="release"  />
+</p>
+<p>通过<code>GeoServer</code>发布计划可以看到，在<code>2.23.x</code>版本开始，会移除对<code>jdk1.8</code>的支持。那么当前我们会选择<code>2.22.x</code>版本进行研究</p>
+<h3 id="环境">环境<a hidden class="anchor" aria-hidden="true" href="#环境">#</a></h3>
+<ul>
+<li>JAVA：1.8或11</li>
+<li>Maven</li>
+<li>Git</li>
+</ul>
+<h2 id="action">Action<a hidden class="anchor" aria-hidden="true" href="#action">#</a></h2>
+<h3 id="获取源码">获取源码<a hidden class="anchor" aria-hidden="true" href="#获取源码">#</a></h3>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-shell" data-lang="shell"><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">git clone git://github.com/geoserver/geoserver.git geoserver
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="c1"># or</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">git clone https://github.com/geoserver/geoserver.git geoserver
+</span></span></code></pre></div><h3 id="代码库结构">代码库结构<a hidden class="anchor" aria-hidden="true" href="#代码库结构">#</a></h3>
+<p>Each branch has the following structure:</p>
+<ul>
+<li><code>build</code> - release and continuous integration scripts</li>
+<li><code>doc</code> - sources for the user and developer guides</li>
+<li><code>src</code> - java sources for GeoServer itself</li>
+<li><code>data</code> - a variety of GeoServer data directories / configurations</li>
+</ul>
+<h3 id="切换到222x分支">切换到2.22.x分支<a hidden class="anchor" aria-hidden="true" href="#切换到222x分支">#</a></h3>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-shell" data-lang="shell"><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="c1"># 查看分支</span>
+</span></span><span class="line"><span class="cl">git branch -av
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="c1"># 切换分支</span>
+</span></span><span class="line"><span class="cl">git checkout -b 2.22.x origin/2.22.x
+</span></span></code></pre></div><p><img loading="lazy" src="https://zhou-fuyi.github.io/picx-images-hosting/002-002.6pn9e7roa9.webp" alt="002-002"  />
+</p>
+<p><img loading="lazy" src="https://zhou-fuyi.github.io/picx-images-hosting/002-003.2ruvxjgnn7.webp" alt="002-003"  />
+</p>
+<h3 id="import-modules-into-intellij">Import modules into IntelliJ<a hidden class="anchor" aria-hidden="true" href="#import-modules-into-intellij">#</a></h3>
+<ol>
+<li>
+<p>Run the IntelliJ IDE</p>
+</li>
+<li>
+<p>From the initial panel select <code>Open</code>.</p>
+</li>
+</ol>
+<p><img loading="lazy" src="https://zhou-fuyi.github.io/picx-images-hosting/002-004.7awx0im4l2.webp" alt="002-004"  />
+</p>
+<ol start="3">
+<li>Navigate to the <code>geoserver/src/pom.xml</code> directory and click <code>OK</code>.</li>
+</ol>
+<p><img loading="lazy" src="https://zhou-fuyi.github.io/picx-images-hosting/002-005.3ye7655k8t.webp" alt="002-005"  />
+</p>
+<ol start="4">
+<li>When asked click on <code>Open as a Project</code>.</li>
+</ol>
+<p><img loading="lazy" src="https://zhou-fuyi.github.io/picx-images-hosting/002-006.4ckmx0dv3z.webp" alt="002-006"  />
+</p>
+<ol start="5">
+<li>Optionally, depending on which platform, IntelliJ may ask to <code>Trust the Project</code>.</li>
+</ol>
+<p><img loading="lazy" src="https://zhou-fuyi.github.io/picx-images-hosting/002-007.45fn6nmbn.webp" alt="002-007"  />
+</p>
+<ol start="6">
+<li>Wait for IntelliJ to <code>Sync</code> the dependencies, it’s possible to follow the process from the <code>Build</code> tab panel on the bottom.</li>
+</ol>
+<p><img loading="lazy" src="https://zhou-fuyi.github.io/picx-images-hosting/002-008.4ckmx0dv45.webp" alt="002-008"  />
+</p>
+<h3 id="finalize-the-geoserver-project-configuration">Finalize the GeoServer Project configuration<a hidden class="anchor" aria-hidden="true" href="#finalize-the-geoserver-project-configuration">#</a></h3>
+<ol>
+<li>Click <code>File &gt; Project Structure</code>.</li>
+</ol>
+<p><img loading="lazy" src="https://zhou-fuyi.github.io/picx-images-hosting/002-009.73tp52zz63.webp" alt="002-009"  />
+</p>
+<ol start="2">
+<li>Update the <code>Name</code> and select the correct <code>SDK</code> accordingly to the GeoServer version.</li>
+</ol>
+<p><img loading="lazy" src="https://zhou-fuyi.github.io/picx-images-hosting/002-010.8hg894b172.webp" alt="002-010"  />
+</p>
+<ol start="3">
+<li>Click <code>File &gt; Settings</code>.</li>
+</ol>
+<p><img loading="lazy" src="https://zhou-fuyi.github.io/picx-images-hosting/002-011.5mnk3bvufo.webp" alt="002-011"  />
+</p>
+<ol start="4">
+<li>From <code>Build, Execution, Deployment &gt; Compiler &gt; Annotation Processors</code>, enable the <code>Annotation processing</code>.</li>
+</ol>
+<p><img loading="lazy" src="https://zhou-fuyi.github.io/picx-images-hosting/002-012.13lj0cqdhz.webp" alt="002-012"  />
+</p>
+<ol start="5">
+<li>Click <code>Build &gt; Rebuild Project</code>.</li>
+</ol>
+<p><img loading="lazy" src="https://zhou-fuyi.github.io/picx-images-hosting/002-013.6t6vbxkr19.webp" alt="002-013"  />
+</p>
+<h3 id="run-geoserver-from-intellij">Run GeoServer from IntelliJ<a hidden class="anchor" aria-hidden="true" href="#run-geoserver-from-intellij">#</a></h3>
+<ol>
+<li>From the Project browser select the <code>web-app</code> module</li>
+<li>Navigate to the <code>org.geoserver.web</code> package</li>
+<li>Right-click the <code>Start</code> class and click to <code>Modify Run Configuration...</code></li>
+</ol>
+<blockquote>
+<p>如果没有该选项，那么直接去<code>Edit Configurations</code>处创建一个即可，<code>Add Configuration</code>，选择<code>Application</code></p>
+</blockquote>
+<p><img loading="lazy" src="https://zhou-fuyi.github.io/picx-images-hosting/002-014.969ht4yk86.webp" alt="002-014"  />
+</p>
+<ol start="4">
+<li>It is important to correctly set the <code>Working directory</code> to <code>src/web/app</code>. While having the <code>Edit Configurations</code> dialog open, fine tune the launch environment (including setting a <code>GEOSERVER_DATA_DIR</code> or the <code>jetty.port</code>). When settings are satisfactory, click <code>OK</code>.</li>
+</ol>
+<p><img loading="lazy" src="https://zhou-fuyi.github.io/picx-images-hosting/002-015.ltpgujmx.webp" alt="002-015"  />
+</p>
+<p><img loading="lazy" src="https://zhou-fuyi.github.io/picx-images-hosting/002-016.8ad0doovsd.webp" alt="002-016"  />
+</p>
+<ol start="5">
+<li>It’s possible now to run GeoServer by selecting <code>Run -&gt; Run 'Start'</code></li>
+</ol>
+<p><img loading="lazy" src="https://zhou-fuyi.github.io/picx-images-hosting/002-017.lvhbrozxq.webp" alt="002-017"  />
+</p>
+<p>第一次启动比较慢</p>
+<p><img loading="lazy" src="https://zhou-fuyi.github.io/picx-images-hosting/002-018.231mdit4oi.webp" alt="002-018"  />
+</p>
+<h3 id="access-geoserver-front-page">Access GeoServer front page<a hidden class="anchor" aria-hidden="true" href="#access-geoserver-front-page">#</a></h3>
+<ul>
+<li>After a few seconds, GeoServer should be accessible at: <a href="http://localhost:8080/geoserver">http://localhost:8080/geoserver</a></li>
+<li>The default <code>admin</code> password is <code>geoserver</code>.</li>
+</ul>
+<h2 id="faq">FAQ<a hidden class="anchor" aria-hidden="true" href="#faq">#</a></h2>
+<h3 id="依赖下载失败或过慢该条仅供参考">依赖下载失败或过慢（该条仅供参考）<a hidden class="anchor" aria-hidden="true" href="#依赖下载失败或过慢该条仅供参考">#</a></h3>
+<p>使用阿里云Maven镜像加速依赖下载，可以参考阿里云Maven向导进行设置【有代理（科学上网）应该就不需要了】</p>
+<blockquote>
+<p>maven配置文件优先级，maven工具所在的conf配置 &gt; 外部化配置</p>
+</blockquote>
+<h3 id="编译提示node不存在wcs1_1">编译提示Node不存在（wcs1_1）<a hidden class="anchor" aria-hidden="true" href="#编译提示node不存在wcs1_1">#</a></h3>
+<p><img loading="lazy" src="https://zhou-fuyi.github.io/picx-images-hosting/002-019.3go5hk46ph.webp" alt="002-019"  />
+</p>
+<p>网络上有一些提示是：手动添加Node的依赖。但是我认为应该不需要手动设置才是，因为从官网的maven quick start中，并未使用任何的编辑器，直接命令行搞定。</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-shell" data-lang="shell"><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="c1"># skip unit tests, skip spotless(Spotless is used as a fast way to check that the google-java-format is being applied to the codebase.)</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">mvn clean install -DskipTests -Dspotless.apply.skip<span class="o">=</span><span class="nb">true</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="c1"># 不想install, package也可以</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">mvn clean package -DskipTests -Dspotless.apply.skip<span class="o">=</span><span class="nb">true</span>
+</span></span></code></pre></div><p>这个时候可以看到，Node这个类存在于编译后的代码中</p>
+<p><img loading="lazy" src="https://zhou-fuyi.github.io/picx-images-hosting/002-020.92pvvf5hiw.webp" alt="002-020"  />
+</p>
+<p>通过跟踪构建过程可以看到，是由javacc在编译过程中生成的（根据rangeset.jjt文件，知识盲区了）</p>
+<p><img loading="lazy" src="https://zhou-fuyi.github.io/picx-images-hosting/002-021.4n7gq5t3b0.webp" alt="002-021"  />
+</p>
+<blockquote>
+<p>其实在官方文档中已经提到了如何处理该问题的，参见<a href="https://docs.geoserver.org/latest/en/developer/quickstart/intellij.html#troubleshooting">Troubleshooting#1</a>，就是需要先完成wcs1_1模块的编译构建。</p>
+<p>我就不管那么多了，直接把所有的都构建了</p>
+</blockquote>
+<h3 id="maven-使用">Maven 使用<a hidden class="anchor" aria-hidden="true" href="#maven-使用">#</a></h3>
+<p>参见：<a href="https://docs.geoserver.org/latest/en/developer/maven-guide/index.html">GeoServer Maven Guide</a></p>
+<h2 id="参考">参考<a hidden class="anchor" aria-hidden="true" href="#参考">#</a></h2>
+<ul>
+<li>
+<p><a href="https://docs.geoserver.org/latest/en/developer/quickstart/intellij.html">IntelliJ QuickStart</a></p>
+</li>
+<li>
+<p><a href="https://docs.geoserver.org/latest/en/developer/maven-guide/index.html">GeoServer Maven Guide</a></p>
+</li>
+<li>
+<p><a href="https://developer.aliyun.com/mvn/guide">阿里云云效Maven</a></p>
+</li>
+</ul>
+
+
+  </div>
+
+  <footer class="post-footer">
+    <ul class="post-tags">
+      <li><a href="https://fuyi-atlas.github.io/tags/geoserver/">Geoserver</a></li>
+      <li><a href="https://fuyi-atlas.github.io/tags/dev-env/">Dev Env</a></li>
+    </ul>
+<nav class="paginav">
+  <a class="prev" href="https://fuyi-atlas.github.io/posts/program/map/how-to-build-a-vector-tile-service/">
+    <span class="title">« Prev</span>
+    <br>
+    <span>如何构建一个矢量瓦片服务</span>
+  </a>
+  <a class="next" href="https://fuyi-atlas.github.io/posts/program/geoserver/001/">
+    <span class="title">Next »</span>
+    <br>
+    <span>深入研究GeoServer—开篇</span>
+  </a>
+</nav>
+
+  </footer>
+</article>
+    </main>
+    
+<footer class="footer">
+    <span>&copy; 2024 <a href="https://fuyi-atlas.github.io/">Fuyi Atlas</a></span>
+    <span>
+        Powered by
+        <a href="https://gohugo.io/" rel="noopener noreferrer" target="_blank">Hugo</a> &
+        <a href="https://github.com/adityatelange/hugo-PaperMod/" rel="noopener" target="_blank">PaperMod</a>
+    </span>
+</footer>
+<a href="#top" aria-label="go to top" title="Go to Top (Alt + G)" class="top-link" id="top-link" accesskey="g">
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 12 6" fill="currentColor">
+        <path d="M12 6H0l6-6z" />
+    </svg>
+</a>
+
+<script>
+    let menu = document.getElementById('menu')
+    if (menu) {
+        menu.scrollLeft = localStorage.getItem("menu-scroll-position");
+        menu.onscroll = function () {
+            localStorage.setItem("menu-scroll-position", menu.scrollLeft);
+        }
+    }
+
+    document.querySelectorAll('a[href^="#"]').forEach(anchor => {
+        anchor.addEventListener("click", function (e) {
+            e.preventDefault();
+            var id = this.getAttribute("href").substr(1);
+            if (!window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+                document.querySelector(`[id='${decodeURIComponent(id)}']`).scrollIntoView({
+                    behavior: "smooth"
+                });
+            } else {
+                document.querySelector(`[id='${decodeURIComponent(id)}']`).scrollIntoView();
+            }
+            if (id === "top") {
+                history.replaceState(null, null, " ");
+            } else {
+                history.pushState(null, null, `#${id}`);
+            }
+        });
+    });
+
+</script>
+<script>
+    var mybutton = document.getElementById("top-link");
+    window.onscroll = function () {
+        if (document.body.scrollTop > 800 || document.documentElement.scrollTop > 800) {
+            mybutton.style.visibility = "visible";
+            mybutton.style.opacity = "1";
+        } else {
+            mybutton.style.visibility = "hidden";
+            mybutton.style.opacity = "0";
+        }
+    };
+
+</script>
+<script>
+    document.getElementById("theme-toggle").addEventListener("click", () => {
+        if (document.body.className.includes("dark")) {
+            document.body.classList.remove('dark');
+            localStorage.setItem("pref-theme", 'light');
+        } else {
+            document.body.classList.add('dark');
+            localStorage.setItem("pref-theme", 'dark');
+        }
+    })
+
+</script>
+<script>
+    document.querySelectorAll('pre > code').forEach((codeblock) => {
+        const container = codeblock.parentNode.parentNode;
+
+        const copybutton = document.createElement('button');
+        copybutton.classList.add('copy-code');
+        copybutton.innerHTML = 'copy';
+
+        function copyingDone() {
+            copybutton.innerHTML = 'copied!';
+            setTimeout(() => {
+                copybutton.innerHTML = 'copy';
+            }, 2000);
+        }
+
+        copybutton.addEventListener('click', (cb) => {
+            if ('clipboard' in navigator) {
+                navigator.clipboard.writeText(codeblock.textContent);
+                copyingDone();
+                return;
+            }
+
+            const range = document.createRange();
+            range.selectNodeContents(codeblock);
+            const selection = window.getSelection();
+            selection.removeAllRanges();
+            selection.addRange(range);
+            try {
+                document.execCommand('copy');
+                copyingDone();
+            } catch (e) { };
+            selection.removeRange(range);
+        });
+
+        if (container.classList.contains("highlight")) {
+            container.appendChild(copybutton);
+        } else if (container.parentNode.firstChild == container) {
+            
+        } else if (codeblock.parentNode.parentNode.parentNode.parentNode.parentNode.nodeName == "TABLE") {
+            
+            codeblock.parentNode.parentNode.parentNode.parentNode.parentNode.appendChild(copybutton);
+        } else {
+            
+            codeblock.parentNode.appendChild(copybutton);
+        }
+    });
+</script>
+</body>
+
+</html>
